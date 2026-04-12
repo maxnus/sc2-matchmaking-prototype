@@ -1,32 +1,431 @@
 {
-  "total_matches": 68040,
-  "total_rounds": 63,
+  "total_matches": 100000,
   "last_n_matches": 500,
-  "window_matches": 20698,
+  "window_matches": 20685,
   "matches_per_bot": {
-    "mean": 504.8,
-    "std": 7.3,
+    "mean": 504.5,
+    "std": 6.3,
     "min": 500,
-    "max": 520
+    "max": 519
   },
   "unique_opponents_per_bot": {
-    "mean": 37.1,
-    "std": 10.4,
-    "min": 29,
-    "max": 61
+    "mean": 36.2,
+    "std": 9.9,
+    "min": 28,
+    "max": 58
+  },
+  "max_repeat_opponent": {
+    "mean": 18.9,
+    "std": 1.9,
+    "min": 11,
+    "max": 20
+  },
+  "elo_diff": {
+    "mean": 130.0,
+    "std": 113.3,
+    "median": 100.8
   },
   "duration_minutes": {
-    "mean": 12.36,
-    "std": 8.78
+    "mean": 12.42,
+    "std": 8.9
   },
   "category_rates": {
-    "normal": 0.9261,
-    "abnormal": 0.0457,
-    "timelimit": 0.0282
+    "normal": 0.9297,
+    "abnormal": 0.0412,
+    "timelimit": 0.0292
   },
   "outcome_rates": {
-    "win": 0.6218475214996618,
-    "draw": 0.040100492801236835,
-    "loss": 0.3380519856991014
+    "win": 0.6225767464346145,
+    "draw": 0.04109257916364515,
+    "loss": 0.3363306744017404
+  },
+  "total_rounds": 93,
+  "elo_convergence": {
+    "elo_std_trajectory": [
+      {
+        "match_count": 0,
+        "elo_std": 0.0
+      },
+      {
+        "match_count": 1080,
+        "elo_std": 67.9
+      },
+      {
+        "match_count": 2160,
+        "elo_std": 89.1
+      },
+      {
+        "match_count": 3240,
+        "elo_std": 108.2
+      },
+      {
+        "match_count": 4320,
+        "elo_std": 123.5
+      },
+      {
+        "match_count": 5400,
+        "elo_std": 134.9
+      },
+      {
+        "match_count": 6480,
+        "elo_std": 147.3
+      },
+      {
+        "match_count": 7560,
+        "elo_std": 156.8
+      },
+      {
+        "match_count": 8640,
+        "elo_std": 164.7
+      },
+      {
+        "match_count": 9720,
+        "elo_std": 172.6
+      },
+      {
+        "match_count": 10800,
+        "elo_std": 178.6
+      },
+      {
+        "match_count": 11880,
+        "elo_std": 184.0
+      },
+      {
+        "match_count": 12960,
+        "elo_std": 189.8
+      },
+      {
+        "match_count": 14040,
+        "elo_std": 192.8
+      },
+      {
+        "match_count": 15120,
+        "elo_std": 199.0
+      },
+      {
+        "match_count": 16200,
+        "elo_std": 202.4
+      },
+      {
+        "match_count": 17280,
+        "elo_std": 206.4
+      },
+      {
+        "match_count": 18360,
+        "elo_std": 208.2
+      },
+      {
+        "match_count": 19440,
+        "elo_std": 211.7
+      },
+      {
+        "match_count": 20520,
+        "elo_std": 216.2
+      },
+      {
+        "match_count": 21600,
+        "elo_std": 219.2
+      },
+      {
+        "match_count": 22680,
+        "elo_std": 223.7
+      },
+      {
+        "match_count": 23760,
+        "elo_std": 227.1
+      },
+      {
+        "match_count": 24840,
+        "elo_std": 228.7
+      },
+      {
+        "match_count": 25920,
+        "elo_std": 230.1
+      },
+      {
+        "match_count": 27000,
+        "elo_std": 230.5
+      },
+      {
+        "match_count": 28080,
+        "elo_std": 233.3
+      },
+      {
+        "match_count": 29160,
+        "elo_std": 236.2
+      },
+      {
+        "match_count": 30240,
+        "elo_std": 240.7
+      },
+      {
+        "match_count": 31320,
+        "elo_std": 242.3
+      },
+      {
+        "match_count": 32400,
+        "elo_std": 245.4
+      },
+      {
+        "match_count": 33480,
+        "elo_std": 246.6
+      },
+      {
+        "match_count": 34560,
+        "elo_std": 246.4
+      },
+      {
+        "match_count": 35640,
+        "elo_std": 249.6
+      },
+      {
+        "match_count": 36720,
+        "elo_std": 251.5
+      },
+      {
+        "match_count": 37800,
+        "elo_std": 255.4
+      },
+      {
+        "match_count": 38880,
+        "elo_std": 255.9
+      },
+      {
+        "match_count": 39960,
+        "elo_std": 256.3
+      },
+      {
+        "match_count": 41040,
+        "elo_std": 259.2
+      },
+      {
+        "match_count": 42120,
+        "elo_std": 260.8
+      },
+      {
+        "match_count": 43200,
+        "elo_std": 261.2
+      },
+      {
+        "match_count": 44280,
+        "elo_std": 261.4
+      },
+      {
+        "match_count": 45360,
+        "elo_std": 263.1
+      },
+      {
+        "match_count": 46440,
+        "elo_std": 264.4
+      },
+      {
+        "match_count": 47520,
+        "elo_std": 264.9
+      },
+      {
+        "match_count": 48600,
+        "elo_std": 267.3
+      },
+      {
+        "match_count": 49680,
+        "elo_std": 266.7
+      },
+      {
+        "match_count": 50760,
+        "elo_std": 266.2
+      },
+      {
+        "match_count": 51840,
+        "elo_std": 267.1
+      },
+      {
+        "match_count": 52920,
+        "elo_std": 266.8
+      },
+      {
+        "match_count": 54000,
+        "elo_std": 267.7
+      },
+      {
+        "match_count": 55080,
+        "elo_std": 266.9
+      },
+      {
+        "match_count": 56160,
+        "elo_std": 266.5
+      },
+      {
+        "match_count": 57240,
+        "elo_std": 268.6
+      },
+      {
+        "match_count": 58320,
+        "elo_std": 268.6
+      },
+      {
+        "match_count": 59400,
+        "elo_std": 270.3
+      },
+      {
+        "match_count": 60480,
+        "elo_std": 273.7
+      },
+      {
+        "match_count": 61560,
+        "elo_std": 273.3
+      },
+      {
+        "match_count": 62640,
+        "elo_std": 273.1
+      },
+      {
+        "match_count": 63720,
+        "elo_std": 274.1
+      },
+      {
+        "match_count": 64800,
+        "elo_std": 275.1
+      },
+      {
+        "match_count": 65880,
+        "elo_std": 276.5
+      },
+      {
+        "match_count": 66960,
+        "elo_std": 278.6
+      },
+      {
+        "match_count": 68040,
+        "elo_std": 280.0
+      },
+      {
+        "match_count": 69120,
+        "elo_std": 279.0
+      },
+      {
+        "match_count": 70200,
+        "elo_std": 277.8
+      },
+      {
+        "match_count": 71280,
+        "elo_std": 279.3
+      },
+      {
+        "match_count": 72360,
+        "elo_std": 280.2
+      },
+      {
+        "match_count": 73440,
+        "elo_std": 282.1
+      },
+      {
+        "match_count": 74520,
+        "elo_std": 283.1
+      },
+      {
+        "match_count": 75600,
+        "elo_std": 283.4
+      },
+      {
+        "match_count": 76680,
+        "elo_std": 284.8
+      },
+      {
+        "match_count": 77760,
+        "elo_std": 285.8
+      },
+      {
+        "match_count": 78840,
+        "elo_std": 287.0
+      },
+      {
+        "match_count": 79920,
+        "elo_std": 286.6
+      },
+      {
+        "match_count": 81000,
+        "elo_std": 285.5
+      },
+      {
+        "match_count": 82080,
+        "elo_std": 285.9
+      },
+      {
+        "match_count": 83160,
+        "elo_std": 285.9
+      },
+      {
+        "match_count": 84240,
+        "elo_std": 286.8
+      },
+      {
+        "match_count": 85320,
+        "elo_std": 287.7
+      },
+      {
+        "match_count": 86400,
+        "elo_std": 288.5
+      },
+      {
+        "match_count": 87480,
+        "elo_std": 288.3
+      },
+      {
+        "match_count": 88560,
+        "elo_std": 288.2
+      },
+      {
+        "match_count": 89640,
+        "elo_std": 290.0
+      },
+      {
+        "match_count": 90720,
+        "elo_std": 290.5
+      },
+      {
+        "match_count": 91800,
+        "elo_std": 290.5
+      },
+      {
+        "match_count": 92880,
+        "elo_std": 292.3
+      },
+      {
+        "match_count": 93960,
+        "elo_std": 292.3
+      },
+      {
+        "match_count": 95040,
+        "elo_std": 292.0
+      },
+      {
+        "match_count": 96120,
+        "elo_std": 294.2
+      },
+      {
+        "match_count": 97200,
+        "elo_std": 296.0
+      },
+      {
+        "match_count": 98280,
+        "elo_std": 296.7
+      },
+      {
+        "match_count": 99360,
+        "elo_std": 294.4
+      },
+      {
+        "match_count": 100440,
+        "elo_std": 294.8
+      }
+    ],
+    "matches_to_90pct": 48600,
+    "final_elo_std": 294.8,
+    "elo_stability": {
+      "mean": 35.0,
+      "std": 7.1,
+      "max": 54.9,
+      "n_snapshots": 47
+    }
   }
 }
