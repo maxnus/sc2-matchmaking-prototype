@@ -1,2 +1,3 @@
-# sc2-matchmaking-prototype
+# StarCraft 2 Matchmaking Prototype
+
 Prototype for matchmaking on AI Arena
