@@ -1,0 +1,11 @@
+{
+  "n_0": 5,
+  "p_normal": 0.930425,
+  "p_timelimit": 0.025184,
+  "p_abnormal": 0.044392,
+  "d": 0.01177,
+  "mu_0": 2.349308,
+  "sigma": 0.491916,
+  "mu_abnormal": 2.154306,
+  "sigma_abnormal": 0.671177
+}
