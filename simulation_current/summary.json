@@ -1,0 +1,32 @@
+{
+  "total_matches": 68040,
+  "total_rounds": 63,
+  "last_n_matches": 500,
+  "window_matches": 20698,
+  "matches_per_bot": {
+    "mean": 504.8,
+    "std": 7.3,
+    "min": 500,
+    "max": 520
+  },
+  "unique_opponents_per_bot": {
+    "mean": 37.1,
+    "std": 10.4,
+    "min": 29,
+    "max": 61
+  },
+  "duration_minutes": {
+    "mean": 12.36,
+    "std": 8.78
+  },
+  "category_rates": {
+    "normal": 0.9261,
+    "abnormal": 0.0457,
+    "timelimit": 0.0282
+  },
+  "outcome_rates": {
+    "win": 0.6218475214996618,
+    "draw": 0.040100492801236835,
+    "loss": 0.3380519856991014
+  }
+}
