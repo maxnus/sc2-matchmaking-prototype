@@ -1,4 +1,4 @@
-"""CLI for simulating the current AI Arena round-robin matchmaker."""
+"""CLI for simulating the round-robin matchmaker (AI Arena's current system)."""
 
 import argparse
 import logging
@@ -14,7 +14,7 @@ logging.basicConfig(level=logging.INFO, format="%(message)s")
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Simulate the current AI Arena round-robin matchmaker")
+    parser = argparse.ArgumentParser(description="Simulate the round-robin matchmaker (AI Arena's current system)")
     add_common_args(parser, _own_dir / "output")
     parser.add_argument("--n-divisions", type=int, default=3)
     args = parser.parse_args()

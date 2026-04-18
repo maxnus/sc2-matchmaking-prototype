@@ -1,4 +1,4 @@
-"""Round-robin matchmaker implementing the current AI Arena system.
+"""Round-robin matchmaker (AI Arena's current system).
 
 Bots are sorted by ELO into `n_divisions` equal bands. Every pair within a
 band plays once per round. After all of a round's matches have completed,
@@ -6,9 +6,9 @@ divisions are re-assigned by current ELO and the next round begins.
 
 Strict round semantics: between rounds the matchmaker returns `None` while
 the last round's matches drain (so no round-N+1 dispatch overlaps with
-round-N completions). This mirrors the sequential for-loop in the original
-`simulate_current.py` where ELO updates from round N are fully applied
-before division re-assignment.
+round-N completions). This matches the sequential for-loop of a classical
+round-robin, where ELO updates from round N are fully applied before
+division re-assignment.
 """
 
 from itertools import combinations

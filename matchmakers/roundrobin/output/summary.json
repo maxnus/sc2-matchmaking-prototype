@@ -1,0 +1,64 @@
+{
+  "total_matches": 1000,
+  "last_n_matches": 500,
+  "window_matches": 1000,
+  "matches_per_bot": {
+    "mean": 24.4,
+    "std": 4.3,
+    "min": 10,
+    "max": 27
+  },
+  "unique_opponents_per_bot": {
+    "mean": 24.4,
+    "std": 4.3,
+    "min": 10,
+    "max": 27
+  },
+  "max_repeat_opponent": {
+    "mean": 1.0,
+    "std": 0.0,
+    "min": 1,
+    "max": 1
+  },
+  "elo_diff": {
+    "mean": 42.3,
+    "std": 37.6,
+    "median": 32.2
+  },
+  "duration_minutes": {
+    "mean": 11.79,
+    "std": 8.11
+  },
+  "category_rates": {
+    "normal": 0.936,
+    "abnormal": 0.04,
+    "timelimit": 0.024
+  },
+  "outcome_rates": {
+    "win": 0.496,
+    "draw": 0.035,
+    "loss": 0.469
+  },
+  "simulated_time_minutes": 990.51,
+  "elo_convergence": {
+    "elo_std_trajectory": [
+      {
+        "match_count": 0,
+        "elo_std": 0.0
+      },
+      {
+        "match_count": 1000,
+        "elo_std": 65.8
+      }
+    ],
+    "matches_to_90pct": 1000,
+    "final_elo_std": 65.8,
+    "elo_stability": {
+      "mean": 0.0,
+      "std": 0.0,
+      "max": 0.0,
+      "n_snapshots": 1
+    }
+  },
+  "total_rounds": 1
+}
