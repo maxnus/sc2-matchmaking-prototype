@@ -1,0 +1,139 @@
+{
+  "total_matches": 20000,
+  "last_n_matches": 500,
+  "window_matches": 19565,
+  "matches_per_bot": {
+    "mean": 477.2,
+    "std": 53.5,
+    "min": 390,
+    "max": 568
+  },
+  "unique_opponents_per_bot": {
+    "mean": 80.7,
+    "std": 0.5,
+    "min": 79,
+    "max": 81
+  },
+  "max_repeat_opponent": {
+    "mean": 13.1,
+    "std": 1.9,
+    "min": 9,
+    "max": 20
+  },
+  "elo_diff": {
+    "mean": 186.7,
+    "std": 148.5,
+    "median": 153.4
+  },
+  "duration_minutes": {
+    "mean": 11.95,
+    "std": 8.26
+  },
+  "category_rates": {
+    "normal": 0.9314,
+    "abnormal": 0.044,
+    "timelimit": 0.0247
+  },
+  "outcome_rates": {
+    "win": 0.476463071811909,
+    "draw": 0.035931510350115,
+    "loss": 0.48760541783797595
+  },
+  "simulated_time_minutes": 19945.33,
+  "elo_convergence": {
+    "elo_std_trajectory": [
+      {
+        "match_count": 0,
+        "elo_std": 0.0
+      },
+      {
+        "match_count": 1000,
+        "elo_std": 62.4
+      },
+      {
+        "match_count": 2000,
+        "elo_std": 100.8
+      },
+      {
+        "match_count": 3000,
+        "elo_std": 124.3
+      },
+      {
+        "match_count": 4000,
+        "elo_std": 138.4
+      },
+      {
+        "match_count": 5000,
+        "elo_std": 153.2
+      },
+      {
+        "match_count": 6000,
+        "elo_std": 166.3
+      },
+      {
+        "match_count": 7000,
+        "elo_std": 174.1
+      },
+      {
+        "match_count": 8000,
+        "elo_std": 177.6
+      },
+      {
+        "match_count": 9000,
+        "elo_std": 184.9
+      },
+      {
+        "match_count": 10000,
+        "elo_std": 186.5
+      },
+      {
+        "match_count": 11000,
+        "elo_std": 192.4
+      },
+      {
+        "match_count": 12000,
+        "elo_std": 192.2
+      },
+      {
+        "match_count": 13000,
+        "elo_std": 192.1
+      },
+      {
+        "match_count": 14000,
+        "elo_std": 195.2
+      },
+      {
+        "match_count": 15000,
+        "elo_std": 198.7
+      },
+      {
+        "match_count": 16000,
+        "elo_std": 200.1
+      },
+      {
+        "match_count": 17000,
+        "elo_std": 199.9
+      },
+      {
+        "match_count": 18000,
+        "elo_std": 202.8
+      },
+      {
+        "match_count": 19000,
+        "elo_std": 201.2
+      },
+      {
+        "match_count": 20000,
+        "elo_std": 207.8
+      }
+    ],
+    "matches_to_90pct": 11000,
+    "final_elo_std": 207.8,
+    "elo_stability": {
+      "mean": 29.3,
+      "std": 9.2,
+      "max": 55.4,
+      "n_snapshots": 10
+    }
+  }
+}
