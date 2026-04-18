@@ -15,8 +15,8 @@ class RandomMatchmaker:
     bots are always included), so we just pick two at random from it.
     """
 
-    def __init__(self, rng: np.random.Generator):
-        self.rng = rng
+    def __init__(self, seed=None):
+        self.rng = np.random.default_rng(seed)
 
     def __call__(
         self,

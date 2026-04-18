@@ -64,13 +64,13 @@ class LadderSim:
         bots: pd.DataFrame,
         global_params: dict,
         matchup_lookup: dict,
-        rng: np.random.Generator,
+        seed=None,
     ):
         self.matchmaker = matchmaker
         self.bots = bots
         self.global_params = global_params
         self.matchup_lookup = matchup_lookup
-        self.rng = rng
+        self.rng = np.random.default_rng(seed)
 
         self.bot_ids: list[int] = bots["bot_id"].tolist()
         self._bot_data_enabled: dict[int, bool] = dict(
