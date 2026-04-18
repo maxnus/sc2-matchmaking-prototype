@@ -11,8 +11,9 @@ import requests
 
 # --- .env loading ---
 
-_script_dir = Path(__file__).resolve().parent
-_env_path = _script_dir.parent / ".env"
+_own_dir = Path(__file__).resolve().parent
+_repo_root = _own_dir.parent
+_env_path = _repo_root / ".env"
 
 try:
     from dotenv import load_dotenv
@@ -225,7 +226,7 @@ def main():
     parser = argparse.ArgumentParser(description="Fetch AI Arena match history")
     parser.add_argument("--days", type=int, default=365, help="Number of days to fetch (default: 365)")
     parser.add_argument("--competition", type=int, default=36, help="Competition ID (default: 36)")
-    parser.add_argument("--output-dir", type=Path, default=_script_dir.parent / "ladder_data", help="Output directory (default: ladder_data/)")
+    parser.add_argument("--output-dir", type=Path, default=_own_dir, help="Output directory (default: data/)")
     args = parser.parse_args()
 
     headers = get_headers()
