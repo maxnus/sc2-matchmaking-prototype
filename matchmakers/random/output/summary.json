@@ -1,45 +1,45 @@
 {
-  "total_matches": 1000,
+  "total_matches": 20000,
   "last_n_matches": 500,
-  "window_matches": 1000,
+  "window_matches": 19603,
   "matches_per_bot": {
-    "mean": 24.4,
-    "std": 4.7,
-    "min": 15,
-    "max": 40
+    "mean": 478.1,
+    "std": 53.7,
+    "min": 393,
+    "max": 578
   },
   "unique_opponents_per_bot": {
-    "mean": 21.6,
-    "std": 4.0,
-    "min": 12,
-    "max": 33
+    "mean": 80.8,
+    "std": 0.5,
+    "min": 79,
+    "max": 81
   },
   "max_repeat_opponent": {
-    "mean": 2.1,
-    "std": 0.4,
-    "min": 1,
-    "max": 3
+    "mean": 13.0,
+    "std": 1.9,
+    "min": 10,
+    "max": 22
   },
   "elo_diff": {
-    "mean": 40.8,
-    "std": 37.6,
-    "median": 29.7
+    "mean": 186.1,
+    "std": 147.2,
+    "median": 153.0
   },
   "duration_minutes": {
-    "mean": 11.7,
-    "std": 7.52
+    "mean": 11.89,
+    "std": 8.09
   },
   "category_rates": {
-    "normal": 0.943,
-    "abnormal": 0.037,
-    "timelimit": 0.02
+    "normal": 0.935,
+    "abnormal": 0.0416,
+    "timelimit": 0.0235
   },
   "outcome_rates": {
-    "win": 0.467,
-    "draw": 0.034,
-    "loss": 0.499
+    "win": 0.48298729786257205,
+    "draw": 0.033413253073509154,
+    "loss": 0.4835994490639188
   },
-  "simulated_time_minutes": 986.0,
+  "simulated_time_minutes": 19854.06,
   "elo_convergence": {
     "elo_std_trajectory": [
       {
@@ -49,15 +49,91 @@
       {
         "match_count": 1000,
         "elo_std": 63.8
+      },
+      {
+        "match_count": 2000,
+        "elo_std": 99.6
+      },
+      {
+        "match_count": 3000,
+        "elo_std": 119.9
+      },
+      {
+        "match_count": 4000,
+        "elo_std": 138.1
+      },
+      {
+        "match_count": 5000,
+        "elo_std": 151.2
+      },
+      {
+        "match_count": 6000,
+        "elo_std": 158.9
+      },
+      {
+        "match_count": 7000,
+        "elo_std": 170.0
+      },
+      {
+        "match_count": 8000,
+        "elo_std": 177.1
+      },
+      {
+        "match_count": 9000,
+        "elo_std": 179.9
+      },
+      {
+        "match_count": 10000,
+        "elo_std": 183.0
+      },
+      {
+        "match_count": 11000,
+        "elo_std": 189.7
+      },
+      {
+        "match_count": 12000,
+        "elo_std": 192.4
+      },
+      {
+        "match_count": 13000,
+        "elo_std": 192.5
+      },
+      {
+        "match_count": 14000,
+        "elo_std": 193.2
+      },
+      {
+        "match_count": 15000,
+        "elo_std": 197.4
+      },
+      {
+        "match_count": 16000,
+        "elo_std": 196.7
+      },
+      {
+        "match_count": 17000,
+        "elo_std": 199.2
+      },
+      {
+        "match_count": 18000,
+        "elo_std": 201.6
+      },
+      {
+        "match_count": 19000,
+        "elo_std": 204.8
+      },
+      {
+        "match_count": 20000,
+        "elo_std": 203.9
       }
     ],
-    "matches_to_90pct": 1000,
-    "final_elo_std": 63.8,
+    "matches_to_90pct": 11000,
+    "final_elo_std": 203.9,
     "elo_stability": {
-      "mean": 0.0,
-      "std": 0.0,
-      "max": 0.0,
-      "n_snapshots": 1
+      "mean": 29.8,
+      "std": 10.3,
+      "max": 56.0,
+      "n_snapshots": 10
     }
   }
 }
