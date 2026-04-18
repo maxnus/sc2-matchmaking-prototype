@@ -1,0 +1,156 @@
+{
+  "total_matches": 20000,
+  "last_n_matches": 500,
+  "window_matches": 19674,
+  "matches_per_bot": {
+    "mean": 479.9,
+    "std": 44.2,
+    "min": 385,
+    "max": 570
+  },
+  "unique_opponents_per_bot": {
+    "mean": 75.6,
+    "std": 5.0,
+    "min": 62,
+    "max": 81
+  },
+  "max_repeat_opponent": {
+    "mean": 20.2,
+    "std": 6.0,
+    "min": 12,
+    "max": 31
+  },
+  "elo_diff": {
+    "mean": 83.3,
+    "std": 113.3,
+    "median": 41.2
+  },
+  "duration_minutes": {
+    "mean": 12.24,
+    "std": 8.47
+  },
+  "category_rates": {
+    "normal": 0.9322,
+    "abnormal": 0.0418,
+    "timelimit": 0.026
+  },
+  "outcome_rates": {
+    "win": 0.479617769645217,
+    "draw": 0.03857883501067399,
+    "loss": 0.481803395344109
+  },
+  "simulated_time_minutes": 20432.77,
+  "elo_convergence": {
+    "elo_std_trajectory": [
+      {
+        "match_count": 0,
+        "elo_std": 0.0
+      },
+      {
+        "match_count": 1000,
+        "elo_std": 41.4
+      },
+      {
+        "match_count": 2000,
+        "elo_std": 64.0
+      },
+      {
+        "match_count": 3000,
+        "elo_std": 82.7
+      },
+      {
+        "match_count": 4000,
+        "elo_std": 98.9
+      },
+      {
+        "match_count": 5000,
+        "elo_std": 114.8
+      },
+      {
+        "match_count": 6000,
+        "elo_std": 131.2
+      },
+      {
+        "match_count": 7000,
+        "elo_std": 141.0
+      },
+      {
+        "match_count": 8000,
+        "elo_std": 151.2
+      },
+      {
+        "match_count": 9000,
+        "elo_std": 160.9
+      },
+      {
+        "match_count": 10000,
+        "elo_std": 167.8
+      },
+      {
+        "match_count": 11000,
+        "elo_std": 173.8
+      },
+      {
+        "match_count": 12000,
+        "elo_std": 177.7
+      },
+      {
+        "match_count": 13000,
+        "elo_std": 183.9
+      },
+      {
+        "match_count": 14000,
+        "elo_std": 188.7
+      },
+      {
+        "match_count": 15000,
+        "elo_std": 196.3
+      },
+      {
+        "match_count": 16000,
+        "elo_std": 200.9
+      },
+      {
+        "match_count": 17000,
+        "elo_std": 205.3
+      },
+      {
+        "match_count": 18000,
+        "elo_std": 209.3
+      },
+      {
+        "match_count": 19000,
+        "elo_std": 211.1
+      },
+      {
+        "match_count": 20000,
+        "elo_std": 214.5
+      }
+    ],
+    "matches_to_90pct": 15000,
+    "final_elo_std": 214.5,
+    "elo_stability": {
+      "mean": 30.3,
+      "std": 10.2,
+      "max": 57.8,
+      "n_snapshots": 10
+    }
+  },
+  "score_components": {
+    "s_skill": {
+      "mean": 0.1124,
+      "std": 0.0421,
+      "pct": 27.1
+    },
+    "s_fair": {
+      "mean": 0.1595,
+      "std": 0.0992,
+      "pct": 38.4
+    },
+    "s_var": {
+      "mean": 0.1435,
+      "std": 0.0406,
+      "pct": 34.5
+    }
+  }
+}

@@ -290,7 +290,7 @@ def compute_elo_convergence(
     """Compute ELO convergence stats from snapshots.
 
     elo_snapshots: list of dicts with at least 'elo' and a grouping key.
-        - If 'match_count' is present (proposed system), use it directly.
+        - If 'match_count' is present, use it directly.
         - If 'round' is present (current system), use match_counts to map.
 
     match_counts: mapping from round number to cumulative match count.
