@@ -109,12 +109,17 @@ def plot_matches_per_bot(
 
 
 def plot_elo_diff(sims: list[SimResult]) -> go.Figure:
+    # Shared bin edges across sims so bar widths are directly comparable.
+    xmax = max(sim.matches["elo_diff"].max() for sim in sims)
+    bin_size = 10.0  # ELO points per bin
+    xbins = dict(start=0, end=xmax + bin_size, size=bin_size)
+
     fig = go.Figure()
     for sim in sims:
         fig.add_trace(go.Histogram(
             x=sim.matches["elo_diff"], name=sim.name,
-            marker_color=sim.color, opacity=0.55, nbinsx=50,
-            histnorm="probability density",
+            marker_color=sim.color, opacity=0.55,
+            xbins=xbins, histnorm="probability density",
         ))
     fig.update_layout(
         barmode="overlay",
@@ -361,12 +366,19 @@ def write_report(
 # --- Main ---
 
 
+_DEFAULT_EXCLUDE = {"random"}  # pure baseline — pass explicitly if you want it
+
+
 def _discover_matchmaker_dirs() -> list[Path]:
-    """Find `matchmakers/*/output` dirs that have a matches.csv."""
+    """Find `matchmakers/*/output` dirs that have a matches.csv, excluding
+    baseline-only matchmakers (e.g. `random`). Pass those explicitly on the
+    command line if you want to include them."""
     root = REPO_ROOT / "matchmakers"
     return sorted(
         d / "output" for d in root.iterdir()
-        if d.is_dir() and (d / "output" / "matches.csv").exists()
+        if d.is_dir()
+        and d.name not in _DEFAULT_EXCLUDE
+        and (d / "output" / "matches.csv").exists()
     )
 
 

@@ -146,10 +146,17 @@ class StochasticMatchmaker:
 
         g_bar = sum(len(self._games_24h[b]) for b in all_bot_ids) / len(all_bot_ids)
 
+        # Treat every bot as single-instance — exclude anyone currently
+        # in a match. (The sim's `available_bots` only honors the physical
+        # `bot_data_enabled` constraint; this matchmaker chooses to be
+        # stricter so non-data bots are also serialized.)
+        in_match = set(bots.loc[bots["in_match"], "bot_id"].astype(int))
+        candidates = [b for b in available_bots if b not in in_match]
+
         pairs: list[tuple[int, int]] = []
         scores: list[float] = []
         components_list: list[dict[str, float]] = []
-        for a, b in combinations(available_bots, 2):
+        for a, b in combinations(candidates, 2):
             if self._gso[a].get(b) == 0 or self._gso[b].get(a) == 0:
                 continue
             s, components = self._score(a, b, ranks, g_bar)

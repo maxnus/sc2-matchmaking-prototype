@@ -1,45 +1,45 @@
 {
   "total_matches": 20000,
   "last_n_matches": 500,
-  "window_matches": 19674,
+  "window_matches": 19980,
   "matches_per_bot": {
-    "mean": 479.9,
-    "std": 44.2,
-    "min": 385,
-    "max": 570
+    "mean": 487.3,
+    "std": 18.5,
+    "min": 435,
+    "max": 523
   },
   "unique_opponents_per_bot": {
-    "mean": 75.6,
-    "std": 5.0,
-    "min": 62,
+    "mean": 79.6,
+    "std": 1.4,
+    "min": 75,
     "max": 81
   },
   "max_repeat_opponent": {
-    "mean": 20.2,
-    "std": 6.0,
-    "min": 12,
-    "max": 31
+    "mean": 15.6,
+    "std": 3.5,
+    "min": 11,
+    "max": 25
   },
   "elo_diff": {
-    "mean": 83.3,
-    "std": 113.3,
-    "median": 41.2
+    "mean": 93.5,
+    "std": 120.0,
+    "median": 48.3
   },
   "duration_minutes": {
-    "mean": 12.24,
-    "std": 8.47
+    "mean": 12.17,
+    "std": 8.57
   },
   "category_rates": {
-    "normal": 0.9322,
-    "abnormal": 0.0418,
-    "timelimit": 0.026
+    "normal": 0.9305,
+    "abnormal": 0.0427,
+    "timelimit": 0.0268
   },
   "outcome_rates": {
-    "win": 0.479617769645217,
-    "draw": 0.03857883501067399,
-    "loss": 0.481803395344109
+    "win": 0.47942942942942945,
+    "draw": 0.038238238238238235,
+    "loss": 0.48233233233233236
   },
-  "simulated_time_minutes": 20432.77,
+  "simulated_time_minutes": 20298.01,
   "elo_convergence": {
     "elo_std_trajectory": [
       {
@@ -48,109 +48,109 @@
       },
       {
         "match_count": 1000,
-        "elo_std": 41.4
+        "elo_std": 40.8
       },
       {
         "match_count": 2000,
-        "elo_std": 64.0
+        "elo_std": 63.8
       },
       {
         "match_count": 3000,
-        "elo_std": 82.7
+        "elo_std": 83.4
       },
       {
         "match_count": 4000,
-        "elo_std": 98.9
+        "elo_std": 102.8
       },
       {
         "match_count": 5000,
-        "elo_std": 114.8
+        "elo_std": 117.1
       },
       {
         "match_count": 6000,
-        "elo_std": 131.2
+        "elo_std": 130.7
       },
       {
         "match_count": 7000,
-        "elo_std": 141.0
+        "elo_std": 142.2
       },
       {
         "match_count": 8000,
-        "elo_std": 151.2
+        "elo_std": 153.2
       },
       {
         "match_count": 9000,
-        "elo_std": 160.9
+        "elo_std": 163.9
       },
       {
         "match_count": 10000,
-        "elo_std": 167.8
+        "elo_std": 174.0
       },
       {
         "match_count": 11000,
-        "elo_std": 173.8
+        "elo_std": 177.6
       },
       {
         "match_count": 12000,
-        "elo_std": 177.7
+        "elo_std": 183.6
       },
       {
         "match_count": 13000,
-        "elo_std": 183.9
+        "elo_std": 187.9
       },
       {
         "match_count": 14000,
-        "elo_std": 188.7
+        "elo_std": 190.6
       },
       {
         "match_count": 15000,
-        "elo_std": 196.3
+        "elo_std": 194.4
       },
       {
         "match_count": 16000,
-        "elo_std": 200.9
+        "elo_std": 197.9
       },
       {
         "match_count": 17000,
-        "elo_std": 205.3
+        "elo_std": 202.0
       },
       {
         "match_count": 18000,
-        "elo_std": 209.3
+        "elo_std": 204.5
       },
       {
         "match_count": 19000,
-        "elo_std": 211.1
+        "elo_std": 209.5
       },
       {
         "match_count": 20000,
-        "elo_std": 214.5
+        "elo_std": 216.9
       }
     ],
-    "matches_to_90pct": 15000,
-    "final_elo_std": 214.5,
+    "matches_to_90pct": 16000,
+    "final_elo_std": 216.9,
     "elo_stability": {
-      "mean": 30.3,
-      "std": 10.2,
-      "max": 57.8,
+      "mean": 29.6,
+      "std": 11.7,
+      "max": 64.7,
       "n_snapshots": 10
     }
   },
   "score_components": {
     "s_skill": {
-      "mean": 0.1124,
-      "std": 0.0421,
-      "pct": 27.1
+      "mean": 0.107,
+      "std": 0.045,
+      "pct": 34.8
     },
     "s_fair": {
-      "mean": 0.1595,
-      "std": 0.0992,
-      "pct": 38.4
+      "mean": 0.0626,
+      "std": 0.06,
+      "pct": 20.4
     },
     "s_var": {
-      "mean": 0.1435,
-      "std": 0.0406,
-      "pct": 34.5
+      "mean": 0.1375,
+      "std": 0.041,
+      "pct": 44.8
     }
   }
 }
