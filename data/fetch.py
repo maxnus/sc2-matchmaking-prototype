@@ -1,13 +1,14 @@
 """Fetch bot ELO ratings and match history from the AI Arena API."""
 
 import argparse
+import asyncio
 import logging
 import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pandas as pd
-import requests
+from aiarena_api import AiArenaClient
 
 # --- .env loading ---
 
@@ -28,66 +29,23 @@ except ImportError:
                 key, _, value = line.partition("=")
                 os.environ.setdefault(key.strip(), value.strip())
 
-# --- Constants ---
-
-API_BASE = "https://aiarena.net/api"
-
 logging.basicConfig(level=logging.INFO, format="%(message)s")
+# httpx logs every request at INFO, which would bury the progress lines.
+logging.getLogger("httpx").setLevel(logging.WARNING)
 log = logging.getLogger(__name__)
-
-
-# --- API helpers ---
-
-
-def get_headers() -> dict:
-    token = os.environ.get("AIARENA_API_TOKEN")
-    if not token:
-        raise SystemExit(
-            "AIARENA_API_TOKEN not set. Place it in a .env file in this directory "
-            "or set it as an environment variable."
-        )
-    return {"Authorization": f"Token {token}"}
-
-
-def fetch_all(url: str, params: dict, headers: dict) -> list[dict]:
-    """Fetch all pages from a paginated API endpoint."""
-    results = []
-    while url:
-        r = requests.get(url, headers=headers, params=params)
-        r.raise_for_status()
-        data = r.json()
-        results.extend(data["results"])
-        url = data.get("next")
-        params = None  # next URL already includes params
-    return results
-
-
-def extract_id(value) -> int:
-    """Extract an integer ID from either an int or a URL like .../bots/961/."""
-    if isinstance(value, int):
-        return value
-    return int(str(value).rstrip("/").split("/")[-1])
 
 
 # --- Data fetching ---
 
 
-def fetch_bots(competition: int, headers: dict) -> pd.DataFrame:
+async def fetch_bots(client: AiArenaClient, competition: int) -> pd.DataFrame:
     """Fetch all bots with ELO ratings for a competition."""
     log.info("Fetching competition participations...")
-    participations = fetch_all(
-        f"{API_BASE}/competition-participations/",
-        {"competition": competition, "format": "json", "limit": 200},
-        headers,
-    )
+    participations = [p async for p in client.list_competition_participations(competition)]
     log.info("  %d participations", len(participations))
 
     log.info("Fetching bot details...")
-    bots_raw = fetch_all(
-        f"{API_BASE}/bots/",
-        {"format": "json", "limit": 200},
-        headers,
-    )
+    bots_raw = [bot async for bot in client.paginate("/bots/")]
     log.info("  %d bots", len(bots_raw))
 
     # Build bot lookup: id -> {name, race, bot_data_enabled}
@@ -103,7 +61,7 @@ def fetch_bots(competition: int, headers: dict) -> pd.DataFrame:
     # Join participations with bot info
     rows = []
     for p in participations:
-        bot_id = extract_id(p["bot"])
+        bot_id = p["bot"]
         info = bot_info.get(bot_id)
         if not info:
             continue
@@ -119,14 +77,10 @@ def fetch_bots(competition: int, headers: dict) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def fetch_rounds(competition: int, since: datetime, headers: dict) -> list[dict]:
+async def fetch_rounds(client: AiArenaClient, competition: int, since: datetime) -> list[dict]:
     """Fetch all rounds for a competition that started after the given date."""
     log.info("Fetching rounds for competition %d...", competition)
-    rounds = fetch_all(
-        f"{API_BASE}/rounds/",
-        {"competition": competition, "format": "json", "limit": 200},
-        headers,
-    )
+    rounds = [r async for r in client.list_rounds(competition)]
     since_str = since.isoformat()
     recent = [r for r in rounds if r.get("started") and r["started"] >= since_str]
     log.info("  %d total rounds, %d in the last %d days",
@@ -135,11 +89,11 @@ def fetch_rounds(competition: int, since: datetime, headers: dict) -> list[dict]
     return recent
 
 
-def fetch_matches(days: int, competition: int, headers: dict) -> pd.DataFrame:
+async def fetch_matches(client: AiArenaClient, days: int, competition: int) -> pd.DataFrame:
     """Fetch all matches from the last N days via rounds."""
     since = datetime.now(timezone.utc) - timedelta(days=days)
 
-    rounds = fetch_rounds(competition, since, headers)
+    rounds = await fetch_rounds(client, competition, since)
     if not rounds:
         log.warning("No rounds found in the last %d days", days)
         return pd.DataFrame()
@@ -148,20 +102,9 @@ def fetch_matches(days: int, competition: int, headers: dict) -> pd.DataFrame:
     for i, rnd in enumerate(rounds, 1):
         log.info("  Fetching matches for round %s (%d/%d)...",
                  rnd["number"], i, len(rounds))
-        matches = fetch_all(
-            f"{API_BASE}/matches/",
-            {"round": rnd["id"], "format": "json", "limit": 200},
-            headers,
-        )
-        all_matches.extend(matches)
+        all_matches.extend([m async for m in client.list_matches_for_round(rnd["id"])])
 
     log.info("  %d total matches fetched", len(all_matches))
-
-    # Log schema on first result for debugging
-    if all_matches:
-        log.info("  Match fields: %s", list(all_matches[0].keys()))
-        if all_matches[0].get("result"):
-            log.info("  Result fields: %s", list(all_matches[0]["result"].keys()))
 
     return _process_matches(all_matches)
 
@@ -229,13 +172,7 @@ def main():
     parser.add_argument("--output-dir", type=Path, default=_own_dir, help="Output directory (default: data/)")
     args = parser.parse_args()
 
-    headers = get_headers()
-
-    bots_df = fetch_bots(args.competition, headers)
-    log.info("Bots with ELO: %d", len(bots_df))
-
-    matches_df = fetch_matches(args.days, args.competition, headers)
-    log.info("Valid matches: %d", len(matches_df))
+    bots_df, matches_df = asyncio.run(_fetch(args.days, args.competition))
 
     if matches_df.empty:
         log.warning("No matches found. Exiting.")
@@ -267,6 +204,17 @@ def main():
     for rtype in ["Player1Win", "Player2Win", "Tie"]:
         count = (matches_df["result_type"] == rtype).sum()
         log.info("  %s: %d", rtype, count)
+
+
+async def _fetch(days: int, competition: int) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """The bots with their ELO, and the matches of the last `days`; the token comes from AIARENA_API_TOKEN."""
+    async with AiArenaClient() as client:
+        bots_df = await fetch_bots(client, competition)
+        log.info("Bots with ELO: %d", len(bots_df))
+
+        matches_df = await fetch_matches(client, days, competition)
+        log.info("Valid matches: %d", len(matches_df))
+    return bots_df, matches_df
 
 
 if __name__ == "__main__":

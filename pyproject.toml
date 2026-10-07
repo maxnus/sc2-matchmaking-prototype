@@ -3,10 +3,10 @@ name = "sc2-matchmaking-prototype"
 version = "0.1.0"
 requires-python = ">=3.11"
 dependencies = [
+    "aiarena-api>=0.1.1",
     "numpy",
     "pandas",
     "plotly",
-    "requests",
     "scipy",
 ]
 
