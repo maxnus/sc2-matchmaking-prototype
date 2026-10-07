@@ -51,7 +51,9 @@ class GlobalParams:
     p_abnormal: float        # probability of crash / bot-level timeout
     d: float                 # draw rate within normal games
     mu_0: float              # log-duration mean for normal games
-    sigma: float             # log-duration std for normal games
+    sigma: float             # log-duration std for normal games (all pairs)
+    sigma_within: float      # log-duration std within a pair (pooled)
+    n_0_duration: float      # prior strength for a pair's mean log-duration
     mu_abnormal: float       # log-duration mean for abnormal games
     sigma_abnormal: float    # log-duration std for abnormal games
 

@@ -6,6 +6,8 @@
   "d": 0.01177,
   "mu_0": 2.349308,
   "sigma": 0.491916,
+  "sigma_within": 0.377764,
+  "n_0_duration": 1.437467,
   "mu_abnormal": 2.154306,
   "sigma_abnormal": 0.671177
 }

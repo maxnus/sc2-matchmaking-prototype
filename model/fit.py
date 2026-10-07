@@ -104,6 +104,18 @@ def _compute_global_params(matches: pd.DataFrame, n_0: int) -> GlobalParams:
     mu_0 = float(log_dur.mean())
     sigma = float(log_dur.std(ddof=0))
 
+    # Split the spread into scatter within a pair and differences between
+    # pairs' means. The between-pair variance is the prior on a pair's mean,
+    # expressed as a pseudo-count of games in `n_0_duration`.
+    log_dur_s = pd.Series(log_dur, index=dur_normal.index)
+    by_pair = log_dur_s.groupby(
+        [normal.loc[dur_normal.index, "bot_lo"], normal.loc[dur_normal.index, "bot_hi"]]
+    )
+    deviations = log_dur_s - by_pair.transform("mean")
+    within_var = float((deviations**2).sum()) / (len(log_dur) - by_pair.ngroups)
+    sigma_within = sqrt(within_var)
+    n_0_duration = within_var / max(sigma**2 - within_var, 1e-9)
+
     dur_abnormal = abnormal["duration_minutes"].dropna()
     dur_abnormal = dur_abnormal[dur_abnormal > 0]
     if len(dur_abnormal) > 0:
@@ -122,6 +134,8 @@ def _compute_global_params(matches: pd.DataFrame, n_0: int) -> GlobalParams:
         d=round(d, 6),
         mu_0=round(mu_0, 6),
         sigma=round(sigma, 6),
+        sigma_within=round(sigma_within, 6),
+        n_0_duration=round(n_0_duration, 6),
         mu_abnormal=round(mu_abnormal, 6),
         sigma_abnormal=round(sigma_abnormal, 6),
     )
@@ -170,7 +184,7 @@ def _compute_matchup_params(
     n_0 = gp.n_0
     d = gp.d
     mu_0 = gp.mu_0
-    sigma = gp.sigma
+    n_0_dur = gp.n_0_duration
 
     bot_info = bots.set_index("bot_id")[["name", "elo"]].to_dict("index")
     bot_ids = sorted(bots["bot_id"].values)
@@ -237,8 +251,11 @@ def _compute_matchup_params(
 
         n_dur = int(dur_agg.loc[(bot_lo, bot_hi), "n_dur"])
         x_bar = float(dur_agg.loc[(bot_lo, bot_hi), "x_bar"])
-        mu_duration = (n_0 * mu_0 + n_dur * x_bar) / (n_0 + n_dur)
-        sigma_duration = sigma / sqrt(n_0 + n_dur)
+        mu_duration = (n_0_dur * mu_0 + n_dur * x_bar) / (n_0_dur + n_dur)
+        # Spread of a single game's log-duration: the scatter within a pair
+        # plus the remaining uncertainty about this pair's mean. With no data
+        # it equals the global `sigma`.
+        sigma_duration = gp.sigma_within * sqrt(1 + 1 / (n_0_dur + n_dur))
 
         rows.append(MatchupRow(
             bot_lo=bot_lo,
