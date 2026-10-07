@@ -44,6 +44,8 @@ def _compute_global_params(matches: pd.DataFrame, n_0: int) -> GlobalParams:
     p_normal = len(normal) / total
     p_timelimit = len(timelimit) / total
     p_abnormal = len(abnormal) / total
+    # Each abnormal game is one bot crashing, and each game has two bots.
+    crash_rate = len(abnormal) / (2 * total)
 
     d = (normal["lo_outcome"] == Outcome.DRAW).sum() / len(normal)
 
@@ -80,6 +82,7 @@ def _compute_global_params(matches: pd.DataFrame, n_0: int) -> GlobalParams:
         p_normal=round(p_normal, 6),
         p_timelimit=round(p_timelimit, 6),
         p_abnormal=round(p_abnormal, 6),
+        crash_rate=round(crash_rate, 6),
         d=round(d, 6),
         mu_0=round(mu_0, 6),
         sigma=round(sigma, 6),
@@ -111,9 +114,15 @@ class MatchupRow:
     N_normal: int
     N_timelimit: int
     N_abnormal: int
+    crash_rate_lo: float
+    crash_rate_hi: float
     alpha_normal: float
     alpha_timelimit: float
     alpha_abnormal: float
+    C_lo: int
+    C_hi: int
+    alpha_crash_lo: float
+    alpha_crash_hi: float
     W: int
     L: int
     D: int
@@ -127,6 +136,27 @@ class MatchupRow:
     sigma_duration: float
 
 
+def _compute_crash_rates(
+    matches: pd.DataFrame, bot_ids: list[int], gp: GlobalParams,
+) -> dict[int, float]:
+    """Posterior mean of each bot's crash rate per game.
+
+    Crashing (or timing out) is mostly a property of the bot: a few bots
+    cause most abnormal games. The prior is the ladder-wide rate with
+    strength `n_0` games, updated with the bot's games and crashes.
+    """
+    games = pd.concat([matches["bot_lo"], matches["bot_hi"]]).value_counts()
+    abnormal = matches[matches["category"] == Category.ABNORMAL]
+    crashed = pd.concat([
+        abnormal.loc[abnormal["lo_outcome"] == Outcome.LOSS, "bot_lo"],
+        abnormal.loc[abnormal["lo_outcome"] == Outcome.WIN, "bot_hi"],
+    ]).value_counts()
+    return {
+        b: (gp.n_0 * gp.crash_rate + crashed.get(b, 0)) / (gp.n_0 + games.get(b, 0))
+        for b in bot_ids
+    }
+
+
 def _compute_matchup_params(
     matches: pd.DataFrame, bots: pd.DataFrame, gp: GlobalParams,
 ) -> pd.DataFrame:
@@ -137,6 +167,9 @@ def _compute_matchup_params(
 
     bot_info = bots.set_index("bot_id")[["name", "elo"]].to_dict("index")
     bot_ids = sorted(bots["bot_id"].values)
+    crash_rates = _compute_crash_rates(matches, bot_ids, gp)
+    # Of the games that don't end in a crash, the share that hits the time limit.
+    p_timelimit_no_crash = gp.p_timelimit / (gp.p_normal + gp.p_timelimit)
 
     all_pairs = list(combinations(bot_ids, 2))
     pair_index = pd.MultiIndex.from_tuples(all_pairs, names=["bot_lo", "bot_hi"])
@@ -150,6 +183,17 @@ def _compute_matchup_params(
     for col in Category:
         if col not in cat_counts.columns:
             cat_counts[col] = 0
+
+    abnormal = matches[matches["category"] == Category.ABNORMAL]
+    # In an abnormal game the bot that crashed loses: a loss for bot_lo
+    # means bot_lo crashed.
+    crash_counts = (
+        abnormal.groupby(["bot_lo", "bot_hi", "lo_outcome"])
+        .size()
+        .unstack(fill_value=0)
+        .reindex(columns=[Outcome.LOSS, Outcome.WIN], fill_value=0)
+        .reindex(pair_index, fill_value=0)
+    )
 
     normal = matches[matches["category"] == Category.NORMAL]
     outcome_counts = (
@@ -184,9 +228,21 @@ def _compute_matchup_params(
         N_timelimit = int(cat_counts.loc[(bot_lo, bot_hi), Category.TIMELIMIT])
         N_abnormal = int(cat_counts.loc[(bot_lo, bot_hi), Category.ABNORMAL])
 
-        alpha_normal = n_0 * gp.p_normal + N_normal
-        alpha_timelimit = n_0 * gp.p_timelimit + N_timelimit
-        alpha_abnormal = n_0 * gp.p_abnormal + N_abnormal
+        # Prior: a game ends abnormally if either bot crashes; otherwise it
+        # hits the time limit at the ladder-wide rate.
+        c_lo, c_hi = crash_rates[bot_lo], crash_rates[bot_hi]
+        p_crash = 1 - (1 - c_lo) * (1 - c_hi)
+        alpha_normal = n_0 * (1 - p_crash) * (1 - p_timelimit_no_crash) + N_normal
+        alpha_timelimit = n_0 * (1 - p_crash) * p_timelimit_no_crash + N_timelimit
+        alpha_abnormal = n_0 * p_crash + N_abnormal
+
+        # Who crashes in an abnormal game: the bots' crash rates as prior,
+        # updated with the pair's own abnormal games.
+        C_lo = int(crash_counts.loc[(bot_lo, bot_hi), Outcome.LOSS])
+        C_hi = int(crash_counts.loc[(bot_lo, bot_hi), Outcome.WIN])
+        share_lo = c_lo / (c_lo + c_hi)
+        alpha_crash_lo = n_0 * share_lo + C_lo
+        alpha_crash_hi = n_0 * (1 - share_lo) + C_hi
 
         W = int(outcome_counts.loc[(bot_lo, bot_hi), Outcome.WIN])
         L = int(outcome_counts.loc[(bot_lo, bot_hi), Outcome.LOSS])
@@ -216,9 +272,15 @@ def _compute_matchup_params(
             N_normal=N_normal,
             N_timelimit=N_timelimit,
             N_abnormal=N_abnormal,
+            crash_rate_lo=round(c_lo, 6),
+            crash_rate_hi=round(c_hi, 6),
             alpha_normal=round(alpha_normal, 6),
             alpha_timelimit=round(alpha_timelimit, 6),
             alpha_abnormal=round(alpha_abnormal, 6),
+            C_lo=C_lo,
+            C_hi=C_hi,
+            alpha_crash_lo=round(alpha_crash_lo, 6),
+            alpha_crash_hi=round(alpha_crash_hi, 6),
             W=W,
             L=L,
             D=D,

@@ -46,18 +46,21 @@ def expected_score(params: MatchupParams | None) -> float:
     """Expected score of `bot_lo` in one simulated match of the pair.
 
     Mirrors `simulate_match`: drawing the probabilities from their
-    Dirichlets and then one outcome is the same as drawing from the
-    posterior means. Time-limit games are draws and abnormal games a coin
-    flip, so both score 0.5. A pair without parameters is simulated from the
-    symmetric prior, which also scores 0.5.
+    Dirichlet or Beta posteriors and then one outcome is the same as drawing
+    from the posterior means. Time-limit games are draws, and bot_lo wins an
+    abnormal game when bot_hi is the one that crashed. A pair without
+    parameters is simulated from the symmetric prior, which scores 0.5.
     """
     if params is None:
         return 0.5
     alpha_category = params.alpha_normal + params.alpha_timelimit + params.alpha_abnormal
     alpha_outcome = params.alpha_win + params.alpha_draw + params.alpha_loss
     p_normal = params.alpha_normal / alpha_category
+    p_timelimit = params.alpha_timelimit / alpha_category
+    p_abnormal = params.alpha_abnormal / alpha_category
     normal_score = (params.alpha_win + 0.5 * params.alpha_draw) / alpha_outcome
-    return p_normal * normal_score + (1.0 - p_normal) * 0.5
+    abnormal_score = params.alpha_crash_hi / (params.alpha_crash_lo + params.alpha_crash_hi)
+    return p_normal * normal_score + p_timelimit * 0.5 + p_abnormal * abnormal_score
 
 
 class GroundTruth:
