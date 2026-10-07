@@ -1,28 +1,43 @@
-"""Generate a single-page comparison report across matchmaker simulation runs.
+"""Build the project report: one HTML page with the data, the model, the
+simulation, the matchmakers and the results.
 
 Usage:
     python analysis/analysis.py                       # auto-discover matchmakers/*
     python analysis/analysis.py <dir1> <dir2> [...]   # explicit output dirs
 
+The text lives in `report.md` next to this script: Markdown with TeX maths
+(`$...$`, `$$...$$`) and two kinds of placeholders, filled in here:
+
+    <!-- figure: name -->      a figure or table, on a line of its own
+    <!-- value: key [fmt] -->  a number, formatted with the optional format spec
+
 Each output dir holds one matchmaker's runs (`seed_*/`) and their aggregate
-`summary.json`, as written by `sim.cli.run_and_write`. Writes `report.html`
-with a summary table and every plot stacked on one page. Labels come from the
-folder name (e.g. `matchmakers/stochastic/output` → `stochastic`).
+`summary.json`, as written by `sim.cli.run_and_write`; its name is taken
+from the folder (e.g. `matchmakers/stochastic/output` → `stochastic`).
+Writes `report.html`, with a contents sidebar built from the `##` and `###`
+headings.
 """
 
 import argparse
 import html
 import json
 import logging
-from dataclasses import dataclass
+import re
+from dataclasses import asdict, dataclass
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
+import plotly.io as pio
+from markdown_it import MarkdownIt
+from mdit_py_plugins.anchors import anchors_plugin
+from mdit_py_plugins.dollarmath import dollarmath_plugin
+from plotly.offline import get_plotlyjs_version
 from plotly.subplots import make_subplots
+from scipy import stats
 
-from sim.common import load_model
+from sim.common import Category, GlobalParams, load_model, preprocess_matches
 from sim.metrics import HEADLINE_METRICS, LOPSIDED_THRESHOLD, GroundTruth, format_metric, mean_ci95
 from sim.paths import DATA_DIR, MODEL_DIR, REPO_ROOT
 
@@ -36,6 +51,11 @@ PALETTE = [
     "#636EFA", "#EF553B", "#00CC96", "#AB63FA",
     "#FFA15A", "#19D3F3", "#FF6692", "#B6E880",
 ]
+
+# Pairs whose true ratings are closer than this count as near-equal.
+NEAR_EQUAL_GAP = 50
+
+KATEX = "https://cdn.jsdelivr.net/npm/katex@0.16.11/dist"
 
 
 @dataclass
@@ -83,7 +103,126 @@ def _pair_counts(matches: pd.DataFrame) -> dict[tuple[int, int], int]:
     return pd.DataFrame({"lo": lo, "hi": hi}).groupby(["lo", "hi"]).size().to_dict()
 
 
-# --- Summary table ---
+# --- Numbers quoted in the text ---
+
+
+def _max_concurrency(matches: pd.DataFrame) -> pd.Series:
+    """Most matches each bot had running at the same time (wall clock)."""
+    m = matches.dropna(subset=["match_started", "result_created"])
+    start = pd.to_datetime(m["match_started"], format="ISO8601")
+    end = pd.to_datetime(m["result_created"], format="ISO8601")
+    events = pd.concat([
+        pd.DataFrame({"bot": m[col], "t": t, "d": d})
+        for col in ("bot1_id", "bot2_id")
+        for t, d in ((start, 1), (end, -1))
+    ])
+    # At equal times, ends (-1) sort before starts (+1).
+    events = events.sort_values(["bot", "t", "d"])
+    return events.groupby("bot")["d"].cumsum().groupby(events["bot"]).max()
+
+
+def data_values(raw: pd.DataFrame, processed: pd.DataFrame, bots: pd.DataFrame) -> dict:
+    started = pd.to_datetime(raw["match_started"], format="ISO8601")
+    active = bots[bots["active"] == True]
+    data_enabled = dict(zip(bots["bot_id"], bots["bot_data_enabled"]))
+    concurrency = _max_concurrency(raw)
+    single = concurrency[concurrency.index.map(data_enabled) == True]
+    parallel = concurrency[concurrency.index.map(data_enabled) == False]
+
+    normal = processed[processed["category"] == Category.NORMAL]
+    normal = normal[normal["duration_minutes"] > 0]
+    wall = (
+        pd.to_datetime(normal["result_created"], format="ISO8601")
+        - pd.to_datetime(normal["match_started"], format="ISO8601")
+    ).dt.total_seconds() / 60
+    n_days = (started.max().normalize() - started.min().normalize()).days + 1
+
+    return {
+        "data.n_matches": len(raw),
+        "data.n_rounds": raw["round"].nunique(),
+        "data.first_day": started.min().date().isoformat(),
+        "data.last_day": started.max().date().isoformat(),
+        "data.n_days": n_days,
+        "data.matches_per_day": len(raw) / n_days,
+        "data.n_bots": len(bots),
+        "data.n_active": len(active),
+        "data.n_active_data": int(active["bot_data_enabled"].sum()),
+        "data.n_invalid": len(raw) - len(processed),
+        **{
+            f"data.n_{c}": int((processed["category"] == c).sum())
+            for c in Category
+        },
+        "data.single_instance_share": float((single <= 1).mean()),
+        "data.parallel_median": float(parallel.median()),
+        "data.wall_game_ratio": float((wall / normal["duration_minutes"]).median()),
+    }
+
+
+def model_values(gp: GlobalParams, matchups: pd.DataFrame, bots: pd.DataFrame) -> dict:
+    active = set(bots.loc[bots["active"] == True, "bot_id"])
+    pairs = matchups[matchups["bot_lo"].isin(active) & matchups["bot_hi"].isin(active)]
+    games = pairs["N_normal"] + pairs["N_timelimit"] + pairs["N_abnormal"]
+
+    # Pairs decided often enough to tell a one-sided match-up from a close one.
+    decided = matchups[(matchups["W"] + matchups["L"]) >= 10]
+    n = (decided["W"] + decided["L"]).to_numpy()
+    win_rate = decided["W"].to_numpy() / n
+    p = decided["E_A"].to_numpy()
+    # Chance of a ≥90% or ≤10% win rate if every pair played exactly to its ELO expectation.
+    p_lopsided = (
+        stats.binom.sf(np.ceil(0.9 * n) - 1, n, p) + stats.binom.cdf(np.floor(0.1 * n), n, p)
+    )
+
+    return {
+        **{f"model.{k}": v for k, v in asdict(gp).items()},
+        "model.median_duration": float(np.exp(gp.mu_0)),
+        "model.n_pairs": len(pairs),
+        "model.n_pairs_10": int((games >= 10).sum()),
+        "model.n_pairs_no_data": int((games == 0).sum()),
+        "model.n_decided_10": len(decided),
+        "model.lopsided_observed": float(((win_rate >= 0.9) | (win_rate <= 0.1)).mean()),
+        "model.lopsided_elo": float(p_lopsided.mean()),
+    }
+
+
+def _near_equal_favourite(truth: GroundTruth) -> float:
+    """Mean favourite's expected score over pairs within `NEAR_EQUAL_GAP` true rating."""
+    r = np.array([truth.ratings[b] for b in truth.bot_ids])
+    upper = np.triu_indices(len(r), 1)
+    near = np.abs(r[:, None] - r[None, :])[upper] < NEAR_EQUAL_GAP
+    favourite = np.maximum(truth.matrix, 1.0 - truth.matrix)[upper]
+    return float(favourite[near].mean())
+
+
+def truth_values(truth: GroundTruth, bots: pd.DataFrame) -> dict:
+    true = np.array([truth.ratings[b] for b in truth.bot_ids])
+    real = bots.set_index("bot_id").loc[truth.bot_ids, "elo"].to_numpy(dtype=float)
+    return {
+        "truth.rating_std": float(true.std()),
+        "truth.near_equal_gap": NEAR_EQUAL_GAP,
+        "truth.near_equal_favourite": _near_equal_favourite(truth),
+        "truth.near_equal_elo": 1.0 / (1.0 + 10.0 ** (-NEAR_EQUAL_GAP / 400.0)),
+        "truth.real_spread_ratio": float(real.std() / true.std()),
+        "metrics.lopsided_threshold": LOPSIDED_THRESHOLD,
+    }
+
+
+def sim_values(sims: list[SimResult], n_bots: int) -> dict:
+    config = sims[0].summary["config"]
+    values = {f"config.{k}": v for k, v in config.items()}
+    values["config.measured_matches"] = config["total_matches"] - config["burn_in"]
+    values["config.matches_per_bot"] = 2 * config["total_matches"] / n_bots
+    for sim in sims:
+        values.update({f"{sim.name}.config.{k}": v for k, v in sim.summary["config"].items()})
+        values.update({f"{sim.name}.{k}": v["mean"] for k, v in sim.summary["metrics"].items()})
+    if "rung" in {s.name for s in sims}:
+        values["rung.picks_per_round"] = (
+            values["rung.config.rung_picks"] + values["rung.config.wildcard_picks"]
+        )
+    return values
+
+
+# --- Tables and figures ---
 
 
 def summary_table(sims: list[SimResult]) -> str:
@@ -102,13 +241,24 @@ def summary_table(sims: list[SimResult]) -> str:
             f"{cells}</tr>"
         )
     return (
-        "<div class='table-wrap'><table class='summary'>\n"
+        "<table class='summary'>\n"
         f"<thead><tr><th>Metric (mean ± 95% CI across runs)</th>{header}</tr></thead>\n"
-        f"<tbody>{''.join(rows)}</tbody>\n</table></div>\n"
+        f"<tbody>{''.join(rows)}</tbody>\n</table>\n"
     )
 
 
-# --- Plots (each returns a go.Figure) ---
+def _style(fig: go.Figure, height: int, legend_below: bool = False) -> go.Figure:
+    legend = (
+        dict(orientation="h", yanchor="top", y=-0.22, xanchor="left", x=0)
+        if legend_below else
+        dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0)
+    )
+    fig.update_layout(
+        template="plotly_white", height=height, legend=legend,
+        margin=dict(l=60, r=20, t=40, b=50),
+        font=dict(family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif", size=13),
+    )
+    return fig
 
 
 def _density_trace(values: np.ndarray, bins: np.ndarray, name: str, color: str) -> go.Scatter:
@@ -121,6 +271,83 @@ def _density_trace(values: np.ndarray, bins: np.ndarray, name: str, color: str) 
     )
 
 
+def _density_bars(values: np.ndarray, bins: np.ndarray, name: str) -> go.Bar:
+    density, edges = np.histogram(values, bins=bins, density=True)
+    return go.Bar(
+        x=(edges[:-1] + edges[1:]) / 2, y=density, width=np.diff(edges),
+        name=name, marker=dict(color="#9aa5b1"), opacity=0.7,
+    )
+
+
+def plot_calibration(matchups: pd.DataFrame) -> go.Figure:
+    """Observed win rates against the ELO prior and the posterior mean, for
+    pairs with at least 10 normal games, from both sides of each pair."""
+    df = matchups.copy()
+    df["total_normal"] = df["W"] + df["L"] + df["D"]
+    df = df[df["total_normal"] >= 10]
+    alpha = df["alpha_win"] + df["alpha_draw"] + df["alpha_loss"]
+
+    # Each pair contributes two points, one per side: ordering pairs by bot id
+    # is arbitrary, so one side alone would make the plot asymmetric.
+    observed = np.concatenate([df["W"] / df["total_normal"], df["L"] / df["total_normal"]])
+    elo = np.concatenate([df["E_A"], 1 - df["E_A"]])
+    posterior = np.concatenate([df["alpha_win"] / alpha, df["alpha_loss"] / alpha])
+    text = np.concatenate([
+        df["bot_lo_name"] + " vs " + df["bot_hi_name"],
+        df["bot_hi_name"] + " vs " + df["bot_lo_name"],
+    ])
+    sizes = np.tile(np.log1p(df["total_normal"].to_numpy()) * 3, 2)
+
+    fig = make_subplots(
+        rows=1, cols=2, horizontal_spacing=0.1,
+        subplot_titles=["ELO prediction", "Posterior mean (in-sample)"],
+    )
+    for col, predicted in enumerate([elo, posterior], start=1):
+        fig.add_trace(go.Scatter(
+            x=predicted, y=observed, mode="markers", text=text,
+            marker=dict(size=sizes, opacity=0.45, color="#636EFA"),
+            hovertemplate="%{text}<br>Predicted: %{x:.2f}<br>Observed: %{y:.2f}<extra></extra>",
+            showlegend=False,
+        ), row=1, col=col)
+        fig.add_trace(go.Scatter(
+            x=[0, 1], y=[0, 1], mode="lines", line=dict(dash="dash", color="gray"),
+            showlegend=False, hoverinfo="skip",
+        ), row=1, col=col)
+        fig.update_xaxes(title_text="Predicted win rate", range=[0, 1], row=1, col=col)
+    fig.update_yaxes(title_text="Observed win rate", range=[0, 1], row=1, col=1)
+    return _style(fig, 430)
+
+
+def plot_durations(processed: pd.DataFrame, gp: GlobalParams, sim: SimResult) -> go.Figure:
+    """Normal-game durations: the global log-normal fit, and the real against
+    the simulated distribution."""
+    normal = processed[processed["category"] == Category.NORMAL]
+    dur = normal["duration_minutes"].dropna()
+    dur = dur[dur > 0].to_numpy()
+    sim_matches = sim.window_matches
+    sim_dur = sim_matches.loc[sim_matches["category"] == "normal", "duration_minutes"].to_numpy()
+
+    fig = make_subplots(
+        rows=1, cols=2, horizontal_spacing=0.1,
+        subplot_titles=["log(duration in minutes)", "Duration (minutes)"],
+    )
+    log_bins = np.linspace(np.log(dur).min(), np.log(60), 61)
+    fig.add_trace(_density_bars(np.log(dur), log_bins, "Real games"), row=1, col=1)
+    x = np.linspace(log_bins[0], log_bins[-1], 200)
+    fig.add_trace(go.Scatter(
+        x=x, y=stats.norm.pdf(x, gp.mu_0, gp.sigma), mode="lines",
+        name="Global log-normal fit", line=dict(color="#EF553B", width=2),
+    ), row=1, col=1)
+
+    bins = np.linspace(0, 60, 61)
+    fig.add_trace(_density_bars(dur, bins, "Real games"), row=1, col=2)
+    fig.data[-1].showlegend = False
+    fig.add_trace(_density_trace(sim_dur, bins, f"Simulated ({sim.name})", "#00CC96"), row=1, col=2)
+    fig.update_yaxes(title_text="Density", row=1, col=1)
+    fig.update_layout(bargap=0)
+    return _style(fig, 400, legend_below=True)
+
+
 def plot_favourite_score(sims: list[SimResult], truth: GroundTruth) -> go.Figure:
     fig = go.Figure()
     bins = np.linspace(0.5, 1.0, 26)
@@ -129,12 +356,8 @@ def plot_favourite_score(sims: list[SimResult], truth: GroundTruth) -> go.Figure
         fav = truth.favourite_score(m["bot_a"].to_numpy(), m["bot_b"].to_numpy())
         fig.add_trace(_density_trace(fav, bins, sim.name, sim.color))
     fig.add_vline(x=LOPSIDED_THRESHOLD, line=dict(color="gray", dash="dash", width=1))
-    fig.update_layout(
-        xaxis_title="Favourite's true expected score",
-        yaxis_title="Density",
-        height=450,
-    )
-    return fig
+    fig.update_layout(xaxis_title="Favourite's true expected score", yaxis_title="Density")
+    return _style(fig, 420)
 
 
 def plot_elo_diff(sims: list[SimResult]) -> go.Figure:
@@ -144,31 +367,33 @@ def plot_elo_diff(sims: list[SimResult]) -> go.Figure:
     for sim in sims:
         fig.add_trace(_density_trace(sim.window_matches["elo_diff"].to_numpy(), bins, sim.name, sim.color))
     fig.update_layout(
-        xaxis_title="Absolute ELO difference at dispatch (sim's own ratings)",
+        xaxis_title="Absolute ELO difference at dispatch (simulation's own ratings)",
         yaxis_title="Density",
-        height=450,
     )
-    return fig
+    return _style(fig, 420)
 
 
 def plot_rating_accuracy(sims: list[SimResult], burn_in: int) -> go.Figure:
-    """RMSE and Spearman ρ against the true ratings over each run, with the
-    mean and 95% CI across runs."""
+    """RMSE, Spearman ρ and spread ratio against the true ratings over each
+    run, with the mean and 95% CI across runs."""
+    panels = [
+        ("rmse", "RMSE (ELO points)"),
+        ("spearman", "Spearman ρ"),
+        ("spread_ratio", "ELO spread ÷ true spread"),
+    ]
     fig = make_subplots(
-        rows=1, cols=2, horizontal_spacing=0.12,
-        subplot_titles=["RMSE vs true ratings", "Spearman ρ vs true ratings"],
+        rows=1, cols=len(panels), horizontal_spacing=0.09,
+        subplot_titles=[title for _, title in panels],
     )
-    for col, key in enumerate(["rmse", "spearman"], start=1):
+    for col, (key, _) in enumerate(panels, start=1):
         for sim in sims:
             traj = pd.DataFrame([
-                {"run": i, **p}
-                for i, r in enumerate(sim.runs)
-                for p in r.summary["rating_accuracy_trajectory"]
+                p for r in sim.runs for p in r.summary["rating_accuracy_trajectory"]
             ])
-            stats = traj.groupby("match_count")[key].apply(lambda v: mean_ci95(v))
-            x = stats.index.to_numpy()
-            mean = np.array([m for m, _ in stats])
-            ci = np.array([c or 0.0 for _, c in stats])
+            ci_by_count = traj.groupby("match_count")[key].apply(mean_ci95)
+            x = ci_by_count.index.to_numpy()
+            mean = np.array([m for m, _ in ci_by_count])
+            ci = np.array([c or 0.0 for _, c in ci_by_count])
             fig.add_trace(go.Scatter(
                 x=np.concatenate([x, x[::-1]]),
                 y=np.concatenate([mean + ci, (mean - ci)[::-1]]),
@@ -181,10 +406,7 @@ def plot_rating_accuracy(sims: list[SimResult], burn_in: int) -> go.Figure:
             ), row=1, col=col)
         fig.add_vline(x=burn_in, line=dict(color="gray", dash="dash", width=1), row=1, col=col)
     fig.update_xaxes(title_text="Matches completed")
-    fig.update_yaxes(title_text="ELO points", row=1, col=1)
-    fig.update_yaxes(title_text="Rank correlation", row=1, col=2)
-    fig.update_layout(height=450)
-    return fig
+    return _style(fig, 420, legend_below=True)
 
 
 def plot_matches_per_bot(
@@ -210,12 +432,8 @@ def plot_matches_per_bot(
             text=[bot_names[b_id] for b_id in bot_ids],
             hovertemplate="%{text}<br>Matches: %{x}<br>Avg duration: %{y:.1f} min<extra></extra>",
         ))
-    fig.update_layout(
-        xaxis_title="Matches played",
-        yaxis_title="Avg game duration (minutes)",
-        height=500,
-    )
-    return fig
+    fig.update_layout(xaxis_title="Matches played", yaxis_title="Avg game duration (minutes)")
+    return _style(fig, 460)
 
 
 def plot_opponent_mean_vs_max(
@@ -244,13 +462,11 @@ def plot_opponent_mean_vs_max(
             text=names,
             hovertemplate="%{text}<br>Mean: %{x:.2f}<br>Max: %{y}<extra></extra>",
         ))
-
     fig.update_layout(
         xaxis_title="Mean matches per opponent",
         yaxis_title="Max matches against a single opponent",
-        height=500,
     )
-    return fig
+    return _style(fig, 460)
 
 
 def plot_opponent_concentration(
@@ -314,9 +530,8 @@ def plot_opponent_concentration(
         yaxis_title="Fraction of bot's matches",
         xaxis=dict(range=[0, 1]),
         yaxis=dict(range=[0, 1]),
-        height=500,
     )
-    return fig
+    return _style(fig, 460)
 
 
 def plot_matchup_heatmap(
@@ -341,104 +556,227 @@ def plot_matchup_heatmap(
         colorbar=dict(title="Matches"),
     ))
     fig.update_layout(
-        height=850,
         xaxis=dict(tickangle=90, tickfont=dict(size=8)),
         yaxis=dict(tickfont=dict(size=8), autorange="reversed"),
     )
+    fig = _style(fig, 820)
+    fig.update_layout(margin=dict(l=140, r=20, t=20, b=140))
     return fig
 
 
-NEAR_EQUAL_GAP = 50
+def _figure_html(fig: go.Figure) -> str:
+    div = pio.to_html(
+        fig, full_html=False, include_plotlyjs=False,
+        config={"responsive": True, "displaylogo": False},
+    )
+    return f"<figure class='plot'>{div}</figure>"
 
 
-def _near_equal_favourite(truth: GroundTruth) -> float:
-    """Mean favourite's expected score over pairs within `NEAR_EQUAL_GAP` true rating."""
-    r = np.array([truth.ratings[b] for b in truth.bot_ids])
-    upper = np.triu_indices(len(r), 1)
-    near = np.abs(r[:, None] - r[None, :])[upper] < NEAR_EQUAL_GAP
-    favourite = np.maximum(truth.matrix, 1.0 - truth.matrix)[upper]
-    return float(favourite[near].mean())
+def heatmaps(sims: list[SimResult], bot_names: dict[int, str], truth: GroundTruth) -> str:
+    """One collapsible heatmap per matchmaker."""
+    return "\n".join(
+        f"<details><summary>{html.escape(sim.name)}</summary>\n"
+        f"{_figure_html(plot_matchup_heatmap(sim, bot_names, truth.ratings))}\n</details>"
+        for sim in sims
+    )
 
 
-# --- Report assembly ---
+# --- Page assembly ---
 
 
-_REPORT_CSS = """
-body { font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-       max-width: 1200px; margin: 20px auto; padding: 0 20px; color: #222; }
-h1 { border-bottom: 2px solid #333; padding-bottom: 10px; }
-h2 { margin-top: 40px; color: #444;
-     border-bottom: 1px solid #ccc; padding-bottom: 5px; }
-p.meta { color: #444; font-size: 0.95em; line-height: 1.45; max-width: 950px; }
-p.caption { color: #555; font-size: 0.95em; line-height: 1.45;
-            margin: 8px 0 18px 0; max-width: 950px; }
-.section { margin-bottom: 30px; }
-table.summary { border-collapse: collapse; font-size: 0.92em; }
-table.summary th, table.summary td { padding: 6px 12px; border-bottom: 1px solid #ddd;
-                                     text-align: right; vertical-align: top; }
+_VALUE = re.compile(r"<!--\s*value:\s*([\w.\-]+)(?:\s+(\S+))?\s*-->")
+_FIGURE = re.compile(r"<!--\s*figure:\s*([\w\-]+)\s*-->")
+
+
+def _fill_values(text: str, values: dict) -> str:
+    def replace(match: re.Match) -> str:
+        key, fmt = match[1], match[2]
+        if key not in values:
+            raise KeyError(f"report.md uses unknown value {key!r}")
+        return format(values[key], fmt) if fmt else str(values[key])
+    return _VALUE.sub(replace, text)
+
+
+def _fill_figures(body: str, blocks: dict[str, str]) -> str:
+    used = set()
+
+    def replace(match: re.Match) -> str:
+        name = match[1]
+        if name not in blocks:
+            raise KeyError(f"report.md uses unknown figure {name!r}")
+        used.add(name)
+        return blocks[name]
+
+    body = _FIGURE.sub(replace, body)
+    for name in blocks.keys() - used:
+        log.warning("Figure %r is not used in report.md", name)
+    return body
+
+
+def _render_math(content: str, options: dict) -> str:
+    """Leave TeX for KaTeX's auto-render, in its delimiters."""
+    if options["display_mode"]:
+        return rf"\[{html.escape(content)}\]"
+    return rf"\({html.escape(content)}\)"
+
+
+def render_markdown(text: str) -> tuple[str, str, list[tuple[int, str, str]]]:
+    """Render `text` to HTML; returns (title, body, contents).
+
+    The title is the `#` heading; contents lists (level, id, text) of the
+    `##` and `###` headings.
+    """
+    md = (
+        MarkdownIt("commonmark", {"html": True})
+        .enable("table")
+        .use(dollarmath_plugin, renderer=_render_math)
+        .use(anchors_plugin, min_level=2, max_level=3)
+    )
+    env: dict = {}
+    tokens = md.parse(text, env)
+    title, contents = "", []
+    for i, token in enumerate(tokens):
+        if token.type != "heading_open":
+            continue
+        heading = tokens[i + 1].content
+        if token.tag == "h1":
+            title = heading
+        elif token.tag in ("h2", "h3"):
+            contents.append((int(token.tag[1]), token.attrs["id"], heading))
+    return title, md.renderer.render(tokens, md.options, env), contents
+
+
+_PAGE_CSS = """
+:root { --text: #1f2328; --muted: #59636e; --border: #d1d9e0; --side: #f6f8fa;
+        --hover: #e7ebef; --accent: #2557c7; --accent-bg: #e6edfb; }
+* { box-sizing: border-box; }
+body { margin: 0; background: #fff; color: var(--text);
+       font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+.layout { display: grid; grid-template-columns: 280px minmax(0, 1fr); }
+nav.sidebar { position: sticky; top: 0; height: 100vh; overflow-y: auto;
+              background: var(--side); border-right: 1px solid var(--border); padding: 24px 14px; }
+nav .site-title { font-weight: 600; font-size: 15px; line-height: 1.35; margin: 0 8px 16px; }
+nav summary { display: none; }
+nav ul { list-style: none; margin: 0; padding: 0; }
+nav a { display: block; padding: 3px 8px; border-radius: 6px; color: var(--muted);
+        text-decoration: none; font-size: 14px; line-height: 1.4; }
+nav li.level-2 { margin-top: 6px; }
+nav li.level-2 > a { color: var(--text); font-weight: 500; }
+nav li.level-3 > a { padding-left: 20px; font-size: 13.5px; }
+nav a:hover { background: var(--hover); }
+nav a.active { color: var(--accent); background: var(--accent-bg); }
+main { min-width: 0; padding: 40px 48px 96px; }
+article { max-width: 940px; margin: 0 auto; }
+article h1 { font-size: 2.1rem; line-height: 1.2; margin: 0 0 20px; }
+article h2 { font-size: 1.6rem; margin: 64px 0 12px; padding-bottom: 6px;
+             border-bottom: 1px solid var(--border); scroll-margin-top: 16px; }
+article h3 { font-size: 1.25rem; margin: 40px 0 8px; scroll-margin-top: 16px; }
+article h4 { font-size: 1.05rem; margin: 28px 0 6px; }
+article a { color: var(--accent); }
+article code { font-size: 0.88em; background: var(--side); padding: 1px 5px; border-radius: 4px; }
+article table { border-collapse: collapse; margin: 18px 0; font-size: 15px;
+                display: block; overflow-x: auto; max-width: 100%; }
+article th, article td { border-bottom: 1px solid var(--border); padding: 6px 12px;
+                         text-align: left; vertical-align: top; }
+article thead th { border-bottom: 2px solid #9aa5b1; }
+.math.block { overflow-x: auto; overflow-y: hidden; padding: 2px 0; }
+figure.plot { margin: 18px 0 8px; }
+article details { border: 1px solid var(--border); border-radius: 8px; padding: 6px 14px; margin: 10px 0; }
+article details > summary { cursor: pointer; font-weight: 500; padding: 4px 0; }
+table.summary td { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+table.summary thead th { text-align: right; }
 table.summary th:first-child { text-align: left; font-weight: normal; min-width: 240px; }
-.table-wrap { overflow-x: auto; }
-table.summary thead th { border-bottom: 2px solid #999; }
-table.summary td { font-variant-numeric: tabular-nums; white-space: nowrap; }
-.muted { color: #888; font-size: 0.85em; font-weight: normal; }
+.muted { color: var(--muted); font-size: 0.85em; font-weight: normal; }
+@media (max-width: 999px) {
+  .layout { display: block; }
+  nav.sidebar { position: sticky; top: 0; z-index: 10; height: auto; max-height: 100vh;
+                border-right: none; border-bottom: 1px solid var(--border); padding: 8px 16px; }
+  nav summary { display: block; cursor: pointer; font-weight: 600; padding: 4px 0; }
+  nav .site-title { display: none; }
+  main { padding: 20px 16px 64px; }
+  article h1 { font-size: 1.7rem; }
+  article h2, article h3 { scroll-margin-top: 64px; }
+}
+"""
+
+_PAGE_JS = """
+const toc = document.getElementById('toc');
+const wide = matchMedia('(min-width: 1000px)');
+const syncToc = () => { toc.open = wide.matches; };
+syncToc();
+wide.addEventListener('change', syncToc);
+toc.addEventListener('click', e => {
+  if (e.target.closest('a') && !wide.matches) toc.open = false;
+});
+
+// Highlight the section being read.
+const links = new Map([...toc.querySelectorAll('a')].map(a => [a.hash.slice(1), a]));
+const headings = [...document.querySelectorAll('article h2[id], article h3[id]')];
+let ticking = false;
+function highlight() {
+  ticking = false;
+  let current = headings[0];
+  for (const h of headings) {
+    if (h.getBoundingClientRect().top < 120) current = h; else break;
+  }
+  links.forEach(a => a.classList.toggle('active', a.hash.slice(1) === current.id));
+}
+addEventListener('scroll', () => { if (!ticking) { ticking = true; requestAnimationFrame(highlight); } },
+                 { passive: true });
+highlight();
+
+// Plots in a closed <details> are drawn without a width; size them when opened.
+document.querySelectorAll('article details').forEach(d => d.addEventListener('toggle', () => {
+  if (d.open) d.querySelectorAll('.js-plotly-plot').forEach(p => Plotly.Plots.resize(p));
+}));
 """
 
 
-def write_report(
-    title: str, meta: str, sims: list[SimResult],
-    sections: list[tuple[str, str, go.Figure | str]],
-    output_path: Path,
-) -> None:
-    """Serialize all sections into a single HTML file.
-
-    `sections` is a list of `(heading, caption, content)` tuples, where
-    `content` is a figure or an HTML fragment.
-    """
-    sim_labels = ", ".join(f"<b style='color:{s.color}'>{s.name}</b>" for s in sims)
-    parts = [
-        "<!DOCTYPE html>\n<html>\n<head>\n",
-        '<meta charset="utf-8">\n',
-        f"<title>{title}</title>\n",
-        f"<style>{_REPORT_CSS}</style>\n",
-        "</head>\n<body>\n",
-        f"<h1>{title}</h1>\n",
-        f"<p class='meta'>Simulations compared: {sim_labels}</p>\n",
-        f"<p class='meta'>{meta}</p>\n",
-    ]
-    plotly_js_included = False
-    for heading, caption, content in sections:
-        parts.append(f"<div class='section'>\n<h2>{heading}</h2>\n")
-        if caption:
-            parts.append(f"<p class='caption'>{caption}</p>\n")
-        if isinstance(content, go.Figure):
-            include_js = False if plotly_js_included else "cdn"
-            plotly_js_included = True
-            parts.append(content.to_html(full_html=False, include_plotlyjs=include_js))
-        else:
-            parts.append(content)
-        parts.append("</div>\n")
-    parts.append("</body>\n</html>\n")
-    output_path.write_text("".join(parts), encoding="utf-8")
-    log.info("Wrote %s", output_path)
-
-
-def _methods_note(sims: list[SimResult]) -> str:
-    config = sims[0].summary["config"]
-    start = {
-        "real": "the bots' current AI Arena ELOs",
-        "flat": "1600 for every bot",
-    }[config["initial_elo"]]
-    return (
-        f"Each matchmaker ran {len(sims[0].runs)} times with different seeds, "
-        f"{config['total_matches']:,} matches per run on {config['max_concurrent']} server slots, "
-        f"with ratings starting from {start}. The first {config['burn_in']:,} matches of every "
-        "run are a burn-in and are left out of all metrics except the rating-accuracy "
-        "trajectory. Table values are means across runs with 95% confidence intervals. "
-        "<b>Truth</b> is the outcome model the sim draws from: every pair's true expected "
-        "score, and the ELO-scale ratings that best fit those expected scores "
-        "(<i>true ratings</i>, centred on 0). Unlike the sim's own ELO, it does not depend "
-        "on who the matchmaker lets play whom."
+def write_page(title: str, body: str, contents: list[tuple[int, str, str]], path: Path) -> None:
+    items = "\n".join(
+        f"<li class='level-{level}'><a href='#{anchor}'>{html.escape(text)}</a></li>"
+        for level, anchor, text in contents
     )
+    math_delimiters = (
+        "[{left: '\\\\[', right: '\\\\]', display: true},"
+        " {left: '\\\\(', right: '\\\\)', display: false}]"
+    )
+    page = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{html.escape(title)}</title>
+<link rel="stylesheet" href="{KATEX}/katex.min.css">
+<script defer src="{KATEX}/katex.min.js"></script>
+<script defer src="{KATEX}/contrib/auto-render.min.js"
+  onload="renderMathInElement(document.querySelector('article'), {{delimiters: {math_delimiters}, throwOnError: false}})"></script>
+<script src="https://cdn.plot.ly/plotly-{get_plotlyjs_version()}.min.js"></script>
+<style>{_PAGE_CSS}</style>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar">
+<div class="site-title">{html.escape(title)}</div>
+<details id="toc" open>
+<summary>Contents</summary>
+<ul>
+{items}
+</ul>
+</details>
+</nav>
+<main>
+<article>
+{body}
+</article>
+</main>
+</div>
+<script>{_PAGE_JS}</script>
+</body>
+</html>
+"""
+    path.write_text(page, encoding="utf-8")
+    log.info("Wrote %s", path)
 
 
 # --- Main ---
@@ -454,12 +792,13 @@ def _discover_matchmaker_dirs() -> list[Path]:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Compare matchmaker simulation runs")
+    parser = argparse.ArgumentParser(description="Build the project report")
     parser.add_argument("dirs", type=Path, nargs="*",
                         help="Simulation output directories (default: every "
                              "`matchmakers/*/output` with a summary.json)")
     parser.add_argument("--data-dir", type=Path, default=DATA_DIR)
     parser.add_argument("--model-dir", type=Path, default=MODEL_DIR)
+    parser.add_argument("--source", type=Path, default=_own_dir / "report.md")
     parser.add_argument("--output-dir", type=Path, default=_own_dir)
     args = parser.parse_args()
 
@@ -468,118 +807,49 @@ def main():
         parser.error("no simulation output dirs found")
     names = [_infer_name(d) for d in dirs]
 
-    args.output_dir.mkdir(parents=True, exist_ok=True)
-
     log.info("Loading %d simulations: %s", len(dirs), ", ".join(names))
     sims = [
         load_simulation(d, name, PALETTE[i % len(PALETTE)])
         for i, (d, name) in enumerate(zip(dirs, names))
     ]
 
-    bots, _, lookup = load_model(args.data_dir, args.model_dir)
+    bots, gp, lookup = load_model(args.data_dir, args.model_dir)
     bot_ids = bots["bot_id"].tolist()
     bot_names = dict(zip(bots["bot_id"], bots["name"]))
     truth = GroundTruth(bot_ids, lookup)
+    matchups = pd.read_csv(args.model_dir / "matchup_params.csv")
+    all_bots = pd.read_csv(args.data_dir / "bots.csv")
+    raw = pd.read_csv(args.data_dir / "matches.csv")
+    processed = preprocess_matches(raw)
     burn_in = sims[0].summary["config"]["burn_in"]
 
-    log.info("Generating report...")
-    window_note = "after the burn-in"
-    sections: list[tuple[str, str, go.Figure | str]] = [
-        (
-            "Summary",
-            "<b>Favourite's true expected score</b>: for each match, the stronger side's "
-            "expected score under the truth (0.5 = coin flip, 1 = certain win), averaged over "
-            "matches. It measures how competitive the matches really are. "
-            "<b>|ΔELO|</b> is the same question asked of the sim's own ratings, which is the "
-            "quantity rating-based matchmakers optimise; compare the two to see how much of "
-            "an ELO gain turns into closer games. "
-            "<b>Rating accuracy</b> averages the post-burn-in ELO snapshots of each run. "
-            "<b>Matches per bot</b>, <b>opponents</b> and <b>throughput</b> are counted over "
-            "the post-burn-in window of each run.",
-            summary_table(sims),
-        ),
-        (
-            "How Close Are the Matches?",
-            f"Distribution of the favourite's true expected score over all matches {window_note} "
-            "(all runs pooled). Mass near 0.5 means competitive matches; the dashed line marks "
-            f"the lopsided threshold ({LOPSIDED_THRESHOLD}). Even between bots whose true "
-            f"ratings are within {NEAR_EQUAL_GAP} points of each other, the favourite's expected "
-            f"score averages {_near_equal_favourite(truth):.2f}, because individual match-ups are "
-            "often one-sided; no matchmaker that pairs by rating alone can get much below that.",
-            plot_favourite_score(sims, truth),
-        ),
-        (
-            "Skill Gap of Matched Pairs (sim's own ELO)",
-            f"Distribution of |ELO<sub>a</sub> &minus; ELO<sub>b</sub>| at dispatch time, over all "
-            f"matches {window_note} (all runs pooled). This is the matchmakers' own objective "
-            "measured on their own rating scale; it overstates how much closer the matches "
-            "get compared with the true expected scores above.",
-            plot_elo_diff(sims),
-        ),
-        (
-            "Rating Accuracy Over Time",
-            "How well the sim's ELO matches the true ratings over each run: RMSE in ELO points "
-            "(left) and rank correlation (right). Lines are means across runs, bands 95% "
-            "confidence intervals, and the dashed line marks the end of the burn-in. "
-            "ELO keeps fluctuating from game to game (K = 16), so the RMSE cannot reach zero. "
-            "A curve that keeps rising instead of levelling off means the ratings drift away "
-            "from the truth. With divisions, for example, bots only exchange ELO within their own "
-            "division, and promotion picks the bots that are currently overrated (relegation the "
-            "underrated ones), so the top division's ratings inflate and the bottom's deflate "
-            "over time. Spearman ρ is insensitive to that kind of stretching; RMSE is not.",
-            plot_rating_accuracy(sims, burn_in),
-        ),
-        (
-            "Match Throughput per Bot",
-            f"Each dot is one bot, in the first run's matches {window_note}. "
-            "<b>X</b>: matches played. "
-            "<b>Y</b>: average game duration. "
-            "A narrow horizontal cluster within one matchmaker means matches are "
-            "distributed evenly across bots — a wide spread indicates some bots "
-            "are being dispatched more often than others. "
-            "Differences in Y between matchmakers would hint at selection bias "
-            "(e.g., a matchmaker preferentially picking a bot's short-game matchups).",
-            plot_matches_per_bot(sims, bot_ids, bot_names),
-        ),
-        (
-            "Opponent Concentration",
-            f"For each bot, sort its opponents by games played (most first) and "
-            f"track the cumulative share of the bot's matches ({window_note}). "
-            "Each curve is the median across bots and runs within that matchmaker; the "
-            "shaded band is the interquartile range. "
-            "The <b>dashed diagonal</b> is perfect equality (bot plays every "
-            "opponent equally often). "
-            "Curves close to the diagonal = even spread across opponents; "
-            "curves bowed up toward the top-left = a few opponents dominate "
-            "that bot's schedule.",
-            plot_opponent_concentration(sims, bot_ids),
-        ),
-        (
-            "Mean vs Max Matches per Opponent",
-            f"Each dot is one bot, in the first run's matches {window_note}. "
-            "<b>X</b>: mean number of matches against each of its opponents. "
-            "<b>Y</b>: games played against its most-frequent opponent. "
-            "The ratio <code>Y / X</code> is the per-bot concentration at the "
-            "top opponent — equivalent to the first-step value of the curve "
-            "above, but resolved per bot so outliers (hover to see names) are "
-            "identifiable.",
-            plot_opponent_mean_vs_max(sims, bot_ids, bot_names),
-        ),
-    ]
-    for sim in sims:
-        sections.append((
-            f"Matchup Frequency — {sim.name}",
-            f"How often each pair of bots played in the first run's matches {window_note}. "
-            "Rows and columns are sorted by true rating (strongest top/left; the number in "
-            "brackets is the true rating relative to the ladder average). "
-            "A dense diagonal band = skill-matched pairs; "
-            "a uniform color = everyone plays everyone; "
-            "bright spots off-diagonal = forced matchups across the skill gap.",
-            plot_matchup_heatmap(sim, bot_names, truth.ratings),
-        ))
+    values = {
+        **data_values(raw, processed, all_bots),
+        **model_values(gp, matchups, all_bots),
+        **truth_values(truth, bots),
+        **sim_values(sims, len(bot_ids)),
+    }
 
-    write_report("Matchmaker Comparison", _methods_note(sims), sims, sections,
-                 args.output_dir / "report.html")
+    log.info("Generating report...")
+    blocks = {
+        "calibration": _figure_html(plot_calibration(matchups)),
+        "durations": _figure_html(plot_durations(processed, gp, sims[0])),
+        "summary-table": summary_table(sims),
+        "favourite-score": _figure_html(plot_favourite_score(sims, truth)),
+        "elo-diff": _figure_html(plot_elo_diff(sims)),
+        "rating-accuracy": _figure_html(plot_rating_accuracy(sims, burn_in)),
+        "matches-per-bot": _figure_html(plot_matches_per_bot(sims, bot_ids, bot_names)),
+        "opponent-concentration": _figure_html(plot_opponent_concentration(sims, bot_ids)),
+        "opponent-mean-vs-max": _figure_html(plot_opponent_mean_vs_max(sims, bot_ids, bot_names)),
+        "heatmaps": heatmaps(sims, bot_names, truth),
+    }
+
+    text = _fill_values(args.source.read_text(encoding="utf-8"), values)
+    title, body, contents = render_markdown(text)
+    body = _fill_figures(body, blocks)
+
+    args.output_dir.mkdir(parents=True, exist_ok=True)
+    write_page(title, body, contents, args.output_dir / "report.html")
 
 
 if __name__ == "__main__":
