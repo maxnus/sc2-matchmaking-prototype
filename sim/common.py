@@ -49,6 +49,7 @@ class GlobalParams:
     p_normal: float          # marginal probability of a normal game
     p_timelimit: float       # probability of hitting the 60-min cap
     p_abnormal: float        # probability of crash / bot-level timeout
+    crash_rate: float        # crashes per bot and game (prior for each bot)
     d: float                 # draw rate within normal games
     mu_0: float              # log-duration mean for normal games
     sigma: float             # log-duration std for normal games (all pairs)
@@ -69,6 +70,8 @@ class MatchupParams:
     alpha_normal: float
     alpha_timelimit: float
     alpha_abnormal: float
+    alpha_crash_lo: float    # Beta posterior on bot_lo being the one that
+    alpha_crash_hi: float    # crashed, given an abnormal game
     alpha_win: float
     alpha_draw: float
     alpha_loss: float
@@ -157,6 +160,8 @@ def load_model(
             alpha_normal=float(row["alpha_normal"]),
             alpha_timelimit=float(row["alpha_timelimit"]),
             alpha_abnormal=float(row["alpha_abnormal"]),
+            alpha_crash_lo=float(row["alpha_crash_lo"]),
+            alpha_crash_hi=float(row["alpha_crash_hi"]),
             alpha_win=float(row["alpha_win"]),
             alpha_draw=float(row["alpha_draw"]),
             alpha_loss=float(row["alpha_loss"]),
@@ -220,8 +225,9 @@ def simulate_match(
         outcome_lo = 0.5
         duration = 60.0
 
-    else:  # abnormal
-        outcome_lo = rng.choice([1.0, 0.0])
+    else:  # abnormal: the bot that crashed loses
+        p_lo_crashed = rng.beta(params.alpha_crash_lo, params.alpha_crash_hi)
+        outcome_lo = 0.0 if rng.random() < p_lo_crashed else 1.0
         duration = _sample_duration(gp.mu_abnormal, gp.sigma_abnormal, rng)
 
     # Flip if bot_a is bot_hi

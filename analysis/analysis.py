@@ -37,7 +37,7 @@ from plotly.offline import get_plotlyjs_version
 from plotly.subplots import make_subplots
 from scipy import stats
 
-from sim.common import Category, GlobalParams, load_model, preprocess_matches
+from sim.common import Category, GlobalParams, Outcome, load_model, preprocess_matches
 from sim.metrics import HEADLINE_METRICS, LOPSIDED_THRESHOLD, GroundTruth, format_metric, mean_ci95
 from sim.paths import DATA_DIR, MODEL_DIR, REPO_ROOT
 
@@ -106,8 +106,9 @@ def _pair_counts(matches: pd.DataFrame) -> dict[tuple[int, int], int]:
 # --- Numbers quoted in the text ---
 
 
-def _max_concurrency(matches: pd.DataFrame) -> pd.Series:
-    """Most matches each bot had running at the same time (wall clock)."""
+def _concurrency(matches: pd.DataFrame) -> pd.DataFrame:
+    """Per bot, how many matches it had running (wall clock) from each
+    start or end of one of its matches (`t`) until the next (`dt`)."""
     m = matches.dropna(subset=["match_started", "result_created"])
     start = pd.to_datetime(m["match_started"], format="ISO8601")
     end = pd.to_datetime(m["result_created"], format="ISO8601")
@@ -118,16 +119,30 @@ def _max_concurrency(matches: pd.DataFrame) -> pd.Series:
     ])
     # At equal times, ends (-1) sort before starts (+1).
     events = events.sort_values(["bot", "t", "d"])
-    return events.groupby("bot")["d"].cumsum().groupby(events["bot"]).max()
+    events["running"] = events.groupby("bot")["d"].cumsum()
+    events["dt"] = (events.groupby("bot")["t"].shift(-1) - events["t"]).dt.total_seconds()
+    return events
 
 
-def data_values(raw: pd.DataFrame, processed: pd.DataFrame, bots: pd.DataFrame) -> dict:
+def data_values(
+    raw: pd.DataFrame, processed: pd.DataFrame, bots: pd.DataFrame, max_parallel: int,
+) -> dict:
     started = pd.to_datetime(raw["match_started"], format="ISO8601")
     active = bots[bots["active"] == True]
     data_enabled = dict(zip(bots["bot_id"], bots["bot_data_enabled"]))
-    concurrency = _max_concurrency(raw)
-    single = concurrency[concurrency.index.map(data_enabled) == True]
-    parallel = concurrency[concurrency.index.map(data_enabled) == False]
+    events = _concurrency(raw)
+    single = events[events["bot"].map(data_enabled) == True].groupby("bot")["running"].max()
+    busy = events[(events["bot"].map(data_enabled) == False) & (events["running"] > 0)]
+    within_cap = busy.loc[busy["running"] <= max_parallel, "dt"].sum() / busy["dt"].sum()
+
+    abnormal = processed[processed["category"] == Category.ABNORMAL]
+    crashed = pd.concat([
+        abnormal.loc[abnormal["lo_outcome"] == Outcome.LOSS, "bot_lo"],
+        abnormal.loc[abnormal["lo_outcome"] == Outcome.WIN, "bot_hi"],
+    ]).value_counts()
+    games = pd.concat([processed["bot_lo"], processed["bot_hi"]]).value_counts()
+    crash_rate = (crashed.reindex(games.index, fill_value=0) / games)
+    crash_rate = crash_rate[crash_rate.index.isin(active["bot_id"])]
 
     normal = processed[processed["category"] == Category.NORMAL]
     normal = normal[normal["duration_minutes"] > 0]
@@ -153,7 +168,10 @@ def data_values(raw: pd.DataFrame, processed: pd.DataFrame, bots: pd.DataFrame) 
             for c in Category
         },
         "data.single_instance_share": float((single <= 1).mean()),
-        "data.parallel_median": float(parallel.median()),
+        "data.parallel_within_cap": float(within_cap),
+        "data.crash_prone": int((crash_rate > 0.1).sum()),
+        "data.median_crash_rate": float(crash_rate.median()),
+        "data.max_crash_rate": float(crash_rate.max()),
         "data.wall_game_ratio": float((wall / normal["duration_minutes"]).median()),
     }
 
@@ -824,7 +842,7 @@ def main():
     burn_in = sims[0].summary["config"]["burn_in"]
 
     values = {
-        **data_values(raw, processed, all_bots),
+        **data_values(raw, processed, all_bots, sims[0].summary["config"]["max_parallel"]),
         **model_values(gp, matchups, all_bots),
         **truth_values(truth, bots),
         **sim_values(sims, len(bot_ids)),

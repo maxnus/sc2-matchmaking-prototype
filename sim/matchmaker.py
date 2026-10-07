@@ -81,17 +81,18 @@ class Matchmaker(Protocol):
 
         `available_bots`: list of bot ids the sim considers eligible to
         start a new match right now. Data-enabled bots currently in a match
-        (`in_match=True`) are excluded; non-data bots are always included
-        (they can run many parallel instances on AI Arena). Matchmakers can
-        pick any pair from this list without re-applying the single-instance
-        rule. Guaranteed `len >= 2` when the matchmaker is called.
+        (`in_match=True`) are excluded, and so are non-data bots already
+        playing the sim's `max_parallel` matches (they can run several
+        parallel instances on AI Arena). Matchmakers can pick any pair from
+        this list without re-applying these limits. Guaranteed `len >= 2`
+        when the matchmaker is called.
 
         Return:
 
         `(bot_a, bot_b)` — the pair to play next. Must be distinct, both must
-        exist in `bots`, and neither may be a `bot_data_enabled=True` bot
-        that's currently `in_match` (the sim raises `ValueError` otherwise
-        — but if you pick from `available_bots` this is already guaranteed).
+        exist in `bots`, and neither may be at its parallel-match limit (the
+        sim raises `ValueError` otherwise — but if you pick from
+        `available_bots` this is already guaranteed).
         Order is not significant to the sim.
 
         `None` — no acceptable pair under the matchmaker's own policy (e.g.

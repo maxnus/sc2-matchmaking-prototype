@@ -10,9 +10,9 @@ class RandomMatchmaker:
     """Uniformly random pair selection. No state, no rematch avoidance.
 
     Intended as a baseline for comparing against smarter matchmakers. The
-    sim's `available_bots` already honors AI Arena's single-instance
-    constraint (data-enabled bots in a current match are excluded; non-data
-    bots are always included), so we just pick two at random from it.
+    sim's `available_bots` already honors the limits on parallel matches
+    (one for data-enabled bots, `max_parallel` for the others), so we just
+    pick two at random from it.
     """
 
     def __init__(self, seed=None):
