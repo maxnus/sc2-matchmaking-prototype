@@ -73,6 +73,7 @@ async def fetch_bots(client: AiArenaClient, competition: int) -> pd.DataFrame:
             "elo": p["elo"],
             "active": p.get("active", False),
             "bot_data_enabled": info["bot_data_enabled"],
+            "division": p.get("division_num") or 0,
         })
 
     return pd.DataFrame(rows)
