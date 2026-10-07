@@ -23,19 +23,15 @@ LOPSIDED_THRESHOLD = 0.9
 _ELO_SLOPE = np.log(10.0) / 400.0
 
 # (metric key, label, format spec, which direction is better) for the
-# metrics shown in the CLI log and the report's summary table.
+# metrics shown in the CLI log and the report's summary table: one per goal,
+# plus both views of rating accuracy, which pull against each other.
 HEADLINE_METRICS = [
     ("favourite_expected_score.mean", "Favourite's true expected score", ".3f", "lower"),
-    ("lopsided_rate", f"Share of lopsided matches (favourite ≥ {LOPSIDED_THRESHOLD})", ".3f", "lower"),
-    ("elo_diff.mean", "|ΔELO| at dispatch (sim's own ratings)", ".0f", "lower"),
     ("rating_accuracy.spearman", "Rating accuracy: Spearman ρ vs true ratings", ".3f", "higher"),
     ("rating_accuracy.rmse", "Rating accuracy: RMSE vs true ratings (ELO)", ".1f", "lower"),
-    ("rating_accuracy.spread_ratio_end", "ELO spread ÷ true spread, end of run", ".2f", "closer to 1"),
     ("matches_per_bot.min", "Fewest matches played by any bot", ".0f", "higher"),
-    ("matches_per_bot.std", "Std of matches per bot", ".1f", "lower"),
     ("unique_opponents_per_bot.mean", "Distinct opponents per bot", ".1f", "higher"),
-    ("max_repeat_opponent.mean", "Most matches against a single opponent", ".1f", "lower"),
-    ("matches_per_day", "Throughput (matches per simulated day)", ".0f", "higher"),
+    ("server_utilisation", "Server time in use", ".1%", "higher"),
 ]
 
 
@@ -141,18 +137,24 @@ def compute_summary(
     elo_snapshots: pd.DataFrame,
     truth: GroundTruth,
     burn_in: int,
+    slots: int,
 ) -> dict:
     """Summary of one run, over the matches completed after the burn-in.
 
     `matches` is the sim's match history (completion order) and
-    `elo_snapshots` its ELO snapshots. The rating-accuracy trajectory covers
+    `elo_snapshots` its ELO snapshots, and `slots` the number of server
+    slots. The rating-accuracy trajectory covers
     the whole run; its summary metrics average the snapshots taken after the
     burn-in, except the spread ratio, which is taken at the end of the run.
     """
     bot_ids = truth.bot_ids
     window = matches.iloc[burn_in:]
     start_time = float(matches["time_end"].iloc[burn_in - 1]) if burn_in > 0 else 0.0
-    days = (float(window["time_end"].iloc[-1]) - start_time) / (24 * 60)
+    end_time = float(window["time_end"].iloc[-1])
+    days = (end_time - start_time) / (24 * 60)
+    # Server time spent on matches within the window; a match that started
+    # during the burn-in counts from the window's start.
+    busy = (window["time_end"] - window["time_start"].clip(lower=start_time)).sum()
 
     sides = pd.DataFrame({
         "bot": np.concatenate([window["bot_a"], window["bot_b"]]),
@@ -196,6 +198,7 @@ def compute_summary(
         "unique_opponents_per_bot": _describe(unique_opp),
         "max_repeat_opponent": _describe(max_repeat),
         "matches_per_day": round(len(window) / days, 1),
+        "server_utilisation": round(float(busy / (slots * (end_time - start_time))), 4),
         "duration_minutes": {
             "mean": round(float(window["duration_minutes"].mean()), 2),
             "std": round(float(window["duration_minutes"].std()), 2),

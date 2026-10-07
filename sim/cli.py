@@ -138,7 +138,9 @@ def _run_seed(
     elo_df.to_csv(out_dir / "elo_history.csv.gz", index=False, compression=_GZIP)
 
     match_df = pd.DataFrame(sim.match_history)
-    summary = compute_summary(match_df, elo_df, GroundTruth(sim.bot_ids, lookup), args.burn_in)
+    summary = compute_summary(
+        match_df, elo_df, GroundTruth(sim.bot_ids, lookup), args.burn_in, args.max_concurrent,
+    )
     summary["sim_seed"] = sim_seed
     summary["mm_seed"] = mm_seed
     if extra_summary is not None:

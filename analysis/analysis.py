@@ -752,7 +752,8 @@ article details { border: 1px solid var(--border); border-radius: 8px; padding: 
 article details > summary { cursor: pointer; font-weight: 500; padding: 4px 0; }
 table.summary td { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 table.summary thead th { text-align: right; white-space: nowrap; }
-table.summary th:first-child { text-align: left; font-weight: normal; min-width: 240px; }
+table.summary th:first-child { text-align: left; font-weight: normal; min-width: 200px; }
+table.summary th, table.summary td { padding: 6px 9px; }
 .muted { color: var(--muted); font-size: 0.85em; font-weight: normal; }
 @media (max-width: 999px) {
   .layout { display: block; }

@@ -38,6 +38,7 @@
       "max": 23
     },
     "matches_per_day": 1151.3,
+    "server_utilisation": 0.9848,
     "duration_minutes": {
       "mean": 14.78,
       "std": 11.36
