@@ -124,6 +124,43 @@ def _concurrency(matches: pd.DataFrame) -> pd.DataFrame:
     return events
 
 
+def _drift_ratio(processed: pd.DataFrame, min_games: int = 10) -> float:
+    """How much pairs' win rates change between the first and second half of
+    the data, relative to chance.
+
+    For pairs with at least `min_games` wins and losses in each half: the
+    mean squared difference of the two win rates, divided by the variance
+    binomial noise alone would give it. About 1 means no drift.
+    """
+    decided = processed[
+        (processed["category"] == Category.NORMAL)
+        & processed["lo_outcome"].isin([Outcome.WIN, Outcome.LOSS])
+    ].copy()
+    decided["lo_win"] = (decided["lo_outcome"] == Outcome.WIN).astype(int)
+    started = pd.to_datetime(decided["match_started"], format="ISO8601")
+    late = started >= started.min() + (started.max() - started.min()) / 2
+    halves = [
+        decided[mask].groupby(["bot_lo", "bot_hi"])["lo_win"].agg(["sum", "size"])
+        for mask in (~late, late)
+    ]
+    both = halves[0].join(halves[1], lsuffix="_a", rsuffix="_b", how="inner")
+    both = both[(both["size_a"] >= min_games) & (both["size_b"] >= min_games)]
+    p_a, p_b = both["sum_a"] / both["size_a"], both["sum_b"] / both["size_b"]
+    pooled = (both["sum_a"] + both["sum_b"]) / (both["size_a"] + both["size_b"])
+    noise = pooled * (1 - pooled) * (1 / both["size_a"] + 1 / both["size_b"])
+    keep = noise > 0
+    return float(((p_a - p_b)[keep] ** 2 / noise[keep]).mean())
+
+
+def _mean_concurrent(matches: pd.DataFrame) -> float:
+    """Average number of matches running at once on the real servers."""
+    m = matches.dropna(subset=["match_started", "result_created"])
+    start = pd.to_datetime(m["match_started"], format="ISO8601")
+    end = pd.to_datetime(m["result_created"], format="ISO8601")
+    busy = (end - start).dt.total_seconds().sum()
+    return float(busy / (end.max() - start.min()).total_seconds())
+
+
 def data_values(
     raw: pd.DataFrame, processed: pd.DataFrame, bots: pd.DataFrame, max_parallel: int,
 ) -> dict:
@@ -173,6 +210,8 @@ def data_values(
         "data.median_crash_rate": float(crash_rate.median()),
         "data.max_crash_rate": float(crash_rate.max()),
         "data.wall_game_ratio": float((wall / normal["duration_minutes"]).median()),
+        "data.drift_ratio": _drift_ratio(processed),
+        "data.mean_concurrent": _mean_concurrent(raw),
     }
 
 

@@ -21,7 +21,7 @@ Divisions may still be shown on the website to report progress, but they would n
 
 Trying matchmakers on the live ladder is slow and risky, so we compare them in simulation:
 
-1. **[Data](#data).** We fetch the ladder's recent match history from the AI Arena API.
+1. **[Data](#data).** We take the ladder's match history from the AI Arena Recap database.
 2. **[Ladder model](#ladder-model).** From it we fit a model that gives, for any pair of bots, the probability of each result and the distribution of game durations, falling back on the bots' ELO ratings where a pair has rarely or never played.
 3. **[Simulation](#simulation).** A simulator plays out a ladder of the same bots on the same number of servers. Whenever a server is free, it asks a matchmaker who should play next, draws the result from the model, and updates the bots' ratings as AI Arena does.
 4. **[Matchmakers](#matchmakers).** We compare the current round-robin system with a random baseline and two alternatives.
@@ -29,7 +29,11 @@ Trying matchmakers on the live ladder is slow and risky, so we compare them in s
 
 ## Data
 
-The data covers <!-- value: data.n_matches , --> matches from <!-- value: data.n_rounds --> rounds, played between <!-- value: data.first_day --> and <!-- value: data.last_day --> (about <!-- value: data.matches_per_day ,.0f --> a day), and was fetched with `data/fetch.py`. Of the <!-- value: data.n_bots --> bots in the competition, <!-- value: data.n_active --> are active; the simulation uses only these. <!-- value: data.n_active_data --> of them have *bot data* enabled: they keep files between matches, so AI Arena runs each of them in at most one match at a time.
+The data is AI Arena's 2026 Season 1, read from the [AI Arena Recap](https://aiarenarecap.com) database with `data/from_recap.py`. It covers the <!-- value: data.n_matches , --> matches from <!-- value: data.n_rounds --> rounds played between <!-- value: data.first_day --> and <!-- value: data.last_day --> (about <!-- value: data.matches_per_day ,.0f --> a day), up to the end of the season.
+
+The season started on 4 March, but its first two months are left out. Every bot starts a season at a rating of 1600, and the ratings took five to six weeks to spread out; match-ups also changed fastest in those first months, as bots were updated (see [Limitations](#limitations)).
+
+Of the <!-- value: data.n_bots --> bots that took part, <!-- value: data.n_active --> finished the season in one of its <!-- value: roundrobin.config.n_divisions --> divisions; the simulation uses these. <!-- value: data.n_active_data --> of them have *bot data* enabled: they keep files between matches, so AI Arena runs each of them in at most one match at a time.
 
 Each result falls into one of the categories the model uses:
 
@@ -115,7 +119,7 @@ $$
 \boldsymbol{\alpha}_\text{outcome} = \big(n_0\, P^\text{ELO}(\text{win}) + W,\;\; n_0\, P^\text{ELO}(\text{draw}) + D,\;\; n_0\, P^\text{ELO}(\text{loss}) + L\big).
 $$
 
-The ratings in the prior are the bots' AI Arena ratings at the time the data was fetched.
+The ratings in the prior are the bots' final AI Arena ratings of the season.
 
 For each match, the simulator draws the probabilities from these Dirichlet distributions and then the result. For a single match that is the same as drawing the result from the posterior means, $\alpha_k / \sum_j \alpha_j$, so in effect every pair plays with fixed probabilities: its posterior means.
 
@@ -161,7 +165,7 @@ Left: the log-durations of all real normal games, with the fitted normal distrib
 
 ### The simulated ladder
 
-The simulator (`sim/ladder_sim.py`) is event-driven. The ladder has <!-- value: config.max_concurrent --> server slots. Whenever slots are free, the simulator asks the matchmaker for a pair of bots, draws the match's category, result and duration from the model, and starts it, until every slot is busy or the matchmaker declines. Then it jumps to the next match to finish, updates both bots' ratings with the ELO rule, and fills the free slot again.
+The simulator (`sim/ladder_sim.py`) is event-driven. The ladder has <!-- value: config.max_concurrent --> server slots; AI Arena ran <!-- value: data.mean_concurrent .0f --> matches at a time on average in this period. Whenever slots are free, the simulator asks the matchmaker for a pair of bots, draws the match's category, result and duration from the model, and starts it, until every slot is busy or the matchmaker declines. Then it jumps to the next match to finish, updates both bots' ratings with the ELO rule, and fills the free slot again.
 
 Bots with bot data play only one match at a time, the others at most <!-- value: config.max_parallel --> at once. The real data agrees: <!-- value: data.single_instance_share .0% --> of the bots with bot data never had two matches running at once, and bots without bot data spent <!-- value: data.parallel_within_cap .2% --> of their busy time in at most <!-- value: config.max_parallel --> matches.
 
@@ -169,7 +173,7 @@ The simulator's clock runs on game time. In the real data, a match occupies its 
 
 ### Experiments
 
-Each matchmaker runs <!-- value: config.seeds --> times with different random seeds. A run plays <!-- value: config.total_matches , --> matches, about <!-- value: config.matches_per_bot .0f --> per bot. Ratings start from the bots' AI Arena ratings at the time the data was fetched, as they would if the ladder switched matchmakers then. The first <!-- value: config.burn_in , --> matches of every run are a burn-in, during which the ratings adjust to the new matchmaker; all metrics except the rating trajectories leave them out. Tables show the mean over runs and its 95% confidence interval.
+Each matchmaker runs <!-- value: config.seeds --> times with different random seeds. A run plays <!-- value: config.total_matches , --> matches, about <!-- value: config.matches_per_bot .0f --> per bot. Ratings start from the bots' final AI Arena ratings of the season, as they would if the ladder switched matchmakers then. The first <!-- value: config.burn_in , --> matches of every run are a burn-in, during which the ratings adjust to the new matchmaker; all metrics except the rating trajectories leave them out. Tables show the mean over runs and its 95% confidence interval.
 
 ### Ground truth and metrics
 
@@ -194,7 +198,7 @@ Picks two free bots uniformly at random. It has no memory and ignores skill: it 
 
 ### Round-robin
 
-Modelled on AI Arena's current system. Bots are sorted by rating into <!-- value: roundrobin.config.n_divisions --> divisions of equal size, and in each round every pair of bots within a division plays once. Only when every match of the round has finished are the divisions re-assigned from the current ratings and the next round started; until then, slots that free up stay idle.
+Modelled on AI Arena's current system. Bots are sorted by rating into <!-- value: roundrobin.config.n_divisions --> divisions of equal size, as many as the real ladder had at the end of the season, and in each round every pair of bots within a division plays once. Only when every match of the round has finished are the divisions re-assigned from the current ratings and the next round started; until then, slots that free up stay idle.
 
 Every bot gets the same number of matches per round, but nobody plays outside their division, and the end of each round leaves servers unused.
 
@@ -284,10 +288,10 @@ The components have different scales, so the weights also normalise them and can
 ### Findings
 
 - **Skill matching makes matches closer, but much less than the rating gap suggests.** With random pairing, the favourite's true expected score averages <!-- value: random.favourite_expected_score.mean .3f -->; round-robin, rung and stochastic bring it down to <!-- value: roundrobin.favourite_expected_score.mean .3f -->, <!-- value: rung.favourite_expected_score.mean .3f --> and <!-- value: stochastic.favourite_expected_score.mean .3f -->. On the simulation's own ratings, the gap between paired bots shrinks far more, from <!-- value: random.elo_diff.mean .0f --> to <!-- value: roundrobin.elo_diff.mean .0f --> ELO points. The ladder itself sets a floor: even bots whose true ratings are within <!-- value: truth.near_equal_gap --> points of each other give the favourite <!-- value: truth.near_equal_favourite .2f --> on average, where ELO would predict at most <!-- value: truth.near_equal_elo .2f -->, because so many match-ups are one-sided.
-- **Pairing by rating stretches the ratings; round-robin keeps stretching them.** Because neighbouring bots beat each other more decisively than their rating gap predicts, ratings learned mostly from close pairings spread out too far. Under rung and stochastic, the ELO spread ends up <!-- value: rung.rating_accuracy.spread_ratio_end .2f --> and <!-- value: stochastic.rating_accuracy.spread_ratio_end .2f --> times the true spread and grows only slowly after the burn-in (random: <!-- value: random.rating_accuracy.spread_ratio_end .2f -->). Under round-robin it keeps growing, to <!-- value: roundrobin.rating_accuracy.spread_ratio_end .2f --> at the end of the run, and its rating error is the largest. A likely cause is that bots only exchange rating within their division, while promotion and relegation pick the bots that are currently over- or underrated. The real AI Arena ratings are stretched too, <!-- value: truth.real_spread_ratio .2f --> times the true spread; since the model's prior is built from those ratings, this fits but doesn't prove the picture.
+- **Pairing by rating stretches the ratings.** Because neighbouring bots beat each other more decisively than their rating gap predicts, ratings learned mostly from close pairings spread out too far. Under rung, the ELO spread levels off at <!-- value: rung.rating_accuracy.spread_ratio_end .2f --> times the true spread (random: <!-- value: random.rating_accuracy.spread_ratio_end .2f -->). Under round-robin and stochastic it is still growing at the end of the run, at <!-- value: roundrobin.rating_accuracy.spread_ratio_end .2f --> and <!-- value: stochastic.rating_accuracy.spread_ratio_end .2f -->, and so are their rating errors. Why rung levels off and the other two don't isn't clear yet. The real AI Arena ratings are stretched too, <!-- value: truth.real_spread_ratio .2f --> times the true spread; since the model's prior is built from those ratings, this fits but doesn't prove the picture.
 - **Rounds cost throughput.** Waiting for the last matches of each round leaves servers idle: round-robin completes <!-- value: roundrobin.matches_per_day ,.0f --> matches per simulated day, rung <!-- value: rung.matches_per_day ,.0f -->, while random and stochastic, which don't wait for rounds, complete <!-- value: random.matches_per_day ,.0f --> and <!-- value: stochastic.matches_per_day ,.0f -->.
 - **Rung spreads matches unevenly.** Bots at either end of the ladder are in fewer rungs: the least-played bot gets <!-- value: rung.matches_per_bot.min .0f --> matches, against an average of <!-- value: rung.matches_per_bot.mean .0f -->.
-- **The stochastic matchmaker** keeps match counts nearly even (standard deviation <!-- value: stochastic.matches_per_bot.std .1f -->) and lets each bot meet <!-- value: stochastic.unique_opponents_per_bot.mean .1f --> distinct opponents on average, without rounds. Its matches are a little less close than round-robin's and rung's: the variety term makes up <!-- value: stochastic.score_components.s_var.pct .0f -->% of its score. Its weights were tuned while it still had a bug that ignored running matches, and should be tuned again.
+- **The stochastic matchmaker** keeps match counts nearly even (standard deviation <!-- value: stochastic.matches_per_bot.std .1f -->) and lets each bot meet <!-- value: stochastic.unique_opponents_per_bot.mean .1f --> distinct opponents on average, without rounds. Its matches are about as close as rung's and less close than round-robin's, and the variety term makes up <!-- value: stochastic.score_components.s_var.pct .0f -->% of its score. Its weights were tuned while it still had a bug that ignored running matches, and should be tuned again.
 
 ### How close are the matches?
 
@@ -333,4 +337,4 @@ How often each pair of bots played in the first run, after the burn-in. Rows and
 
 - **Game time, not server time.** Matches occupy a server for their game time, while in reality they take about <!-- value: data.wall_game_ratio .2f --> times as long (see [above](#the-simulated-ladder)).
 - **Fixed probabilities.** Every pair plays with its posterior mean probabilities; the uncertainty of the fit doesn't carry over into the comparison. Drawing one set of probabilities per run would carry it over.
-- **A snapshot of the ladder.** The model treats the bots as unchanged over the <!-- value: data.n_days --> days of data, although bots get updated, and its prior uses the ratings at the time of fetching.
+- **A snapshot of the ladder.** The model treats the bots as unchanged over the <!-- value: data.n_days --> days of data, although bots get updated: between the first and the second half of the data, pairs' win rates change <!-- value: data.drift_ratio .1f --> times as much as chance alone would explain. A shorter window drifts less but leaves fewer games per pair; `data/from_recap.py --since` sets it.
