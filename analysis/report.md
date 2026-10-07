@@ -289,6 +289,8 @@ The components have different scales, so the weights also normalise them and can
 
 <!-- figure: summary-table -->
 
+Each row is coloured by where a matchmaker's value lies between the row's best (green) and worst (red), so values that are close get similar colours.
+
 ### Findings
 
 - **Skill matching makes matches closer, but much less than the rating gap suggests.** With random pairing, the favourite's true expected score averages <!-- value: random.favourite_expected_score.mean .3f -->; round-robin, rung and stochastic bring it down to <!-- value: roundrobin.favourite_expected_score.mean .3f -->, <!-- value: rung.favourite_expected_score.mean .3f --> and <!-- value: stochastic.favourite_expected_score.mean .3f -->. On the simulation's own ratings, the gap between paired bots shrinks far more, from <!-- value: random.elo_diff.mean .0f --> to <!-- value: roundrobin.elo_diff.mean .0f --> ELO points. The ladder itself sets a floor: even bots whose true ratings are within <!-- value: truth.near_equal_gap --> points of each other give the favourite <!-- value: truth.near_equal_favourite .2f --> on average, where ELO would predict at most <!-- value: truth.near_equal_elo .2f -->, because so many match-ups are one-sided.

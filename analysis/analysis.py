@@ -290,6 +290,35 @@ def sim_values(sims: list[SimResult], n_bots: int) -> dict:
 # --- Tables and figures ---
 
 
+# Cell backgrounds of the summary table: worst, middle and best value of a row.
+_WORST_RGB, _MIDDLE_RGB, _BEST_RGB = (244, 199, 195), (255, 255, 255), (200, 230, 201)
+
+
+def _ranking(values: list[float], better: str) -> list[float | None]:
+    """Where each value lies between the row's worst (0) and best (1);
+    `None` throughout if they are all equal."""
+    v = np.asarray(values, dtype=float)
+    if better == "lower":
+        v = -v
+    elif better == "closer to 1":
+        v = -np.abs(v - 1)
+    worst, best = v.min(), v.max()
+    if best == worst:
+        return [None] * len(v)
+    return list((v - worst) / (best - worst))
+
+
+def _ranking_colour(position: float | None) -> str:
+    """Red for the worst, through white, to green for the best."""
+    if position is None:
+        return "transparent"
+    if position < 0.5:
+        lo, hi, t = _WORST_RGB, _MIDDLE_RGB, position * 2
+    else:
+        lo, hi, t = _MIDDLE_RGB, _BEST_RGB, position * 2 - 1
+    return "#" + "".join(f"{round(a + (b - a) * t):02x}" for a, b in zip(lo, hi))
+
+
 def summary_table(sims: list[SimResult]) -> str:
     header = "".join(
         f"<th style='color:{s.color}'>{html.escape(s.name)}<br>"
@@ -298,8 +327,11 @@ def summary_table(sims: list[SimResult]) -> str:
     )
     rows = []
     for key, label, fmt, better in HEADLINE_METRICS:
+        stats = [s.summary["metrics"][key] for s in sims]
+        positions = _ranking([stat["mean"] for stat in stats], better)
         cells = "".join(
-            f"<td>{format_metric(s.summary['metrics'][key], fmt)}</td>" for s in sims
+            f"<td style='background:{_ranking_colour(position)}'>{format_metric(stat, fmt)}</td>"
+            for stat, position in zip(stats, positions)
         )
         rows.append(
             f"<tr><th>{html.escape(label)}<br><span class='muted'>{better} is better</span></th>"
