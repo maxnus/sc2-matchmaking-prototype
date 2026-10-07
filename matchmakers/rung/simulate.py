@@ -2,6 +2,7 @@
 
 import argparse
 import logging
+from functools import partial
 from pathlib import Path
 
 from sim.cli import add_common_args, run_and_write
@@ -13,6 +14,10 @@ _own_dir = Path(__file__).resolve().parent
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 
 
+def add_total_rounds(sim, summary):
+    summary["metrics"]["total_rounds"] = sim.matchmaker._round
+
+
 def main():
     parser = argparse.ArgumentParser(description="Simulate the rung matchmaker")
     add_common_args(parser, _own_dir / "output")
@@ -21,17 +26,13 @@ def main():
     parser.add_argument("--wildcard-picks", type=int, default=2)
     args = parser.parse_args()
 
-    matchmaker = RungMatchmaker(
+    make_matchmaker = partial(
+        RungMatchmaker,
         rung_size=args.rung_size,
         rung_picks=args.rung_picks,
         wildcard_picks=args.wildcard_picks,
-        seed=args.mm_seed,
     )
-
-    def add_total_rounds(sim, summary):
-        summary["total_rounds"] = sim.matchmaker._round
-
-    run_and_write(matchmaker, args, extra_summary=add_total_rounds)
+    run_and_write(make_matchmaker, args, extra_summary=add_total_rounds)
 
 
 if __name__ == "__main__":

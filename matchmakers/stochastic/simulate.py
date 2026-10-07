@@ -2,6 +2,7 @@
 
 import argparse
 import logging
+from functools import partial
 from pathlib import Path
 
 import pandas as pd
@@ -17,7 +18,9 @@ log = logging.getLogger(__name__)
 
 
 def _add_score_components(sim, summary):
-    choice_df = pd.DataFrame(sim.matchmaker.choice_log)
+    # `choice_log` is in dispatch order; skipping the first `burn_in`
+    # dispatches approximates the summary's post-burn-in window.
+    choice_df = pd.DataFrame(sim.matchmaker.choice_log[summary["burn_in"]:])
     components = {}
     for comp in ["s_skill", "s_fair", "s_var"]:
         vals = choice_df[comp]
@@ -28,7 +31,7 @@ def _add_score_components(sim, summary):
     total_mean = sum(v["mean"] for v in components.values())
     for comp in components:
         components[comp]["pct"] = round(components[comp]["mean"] / total_mean * 100, 1) if total_mean else 0
-    summary["score_components"] = components
+    summary["metrics"]["score_components"] = components
 
 
 def main():
@@ -50,9 +53,8 @@ def main():
         tau=args.tau, lam=args.lam, temperature=args.temperature,
     )
     log.info("Scoring params: %s", params)
-    matchmaker = StochasticMatchmaker(params, seed=args.mm_seed)
 
-    run_and_write(matchmaker, args, extra_summary=_add_score_components)
+    run_and_write(partial(StochasticMatchmaker, params), args, extra_summary=_add_score_components)
 
 
 if __name__ == "__main__":
