@@ -8,6 +8,7 @@ The matchmaker owns: pair selection and any scoring bookkeeping.
 
 import heapq
 import logging
+from collections import Counter
 from typing import NamedTuple
 
 import numpy as np
@@ -49,9 +50,9 @@ class LadderSim:
         sim.run(total_matches=20000)
         # Outputs: sim.match_history, sim.elo_snapshots, sim.ratings, sim.current_time
 
-    Concurrency: each bot can play only one match at a time. `max_concurrent`
-    caps the number of simultaneously running matches to model the AI
-    Arena server slot constraint.
+    Concurrency: `max_concurrent` caps the number of simultaneously running
+    matches to model the AI Arena server slots. A bot with bot data plays
+    one match at a time; a bot without plays at most `max_parallel`.
 
     `time_start` / `time_end` / `elo_diff` in `match_history` are stored at
     full precision so the matchmaker can derive state (e.g., 24h windows)
@@ -101,20 +102,24 @@ class LadderSim:
         self,
         total_matches: int,
         max_concurrent: int = 12,
+        max_parallel: int = 4,
         elo_snapshot_interval: int = 1000,
         history_window_minutes: float = 24 * 60,
     ) -> None:
         log.info("%d bots, %d server slots", len(self.bot_ids), max_concurrent)
-        self._fill_slots(max_concurrent)
+        self._fill_slots(max_concurrent, max_parallel)
         while len(self.match_history) < total_matches and self.active_matches:
             self._advance(elo_snapshot_interval, history_window_minutes)
-            self._fill_slots(max_concurrent)
+            self._fill_slots(max_concurrent, max_parallel)
         log.info(
             "Completed %d matches in %.0f simulated minutes (%.1f days)",
             len(self.match_history), self.current_time, self.current_time / (24 * 60),
         )
 
-    def _fill_slots(self, max_concurrent: int) -> None:
+    def _parallel_limit(self, bot: int, max_parallel: int) -> int:
+        return 1 if self._bot_data_enabled[bot] else max_parallel
+
+    def _fill_slots(self, max_concurrent: int, max_parallel: int) -> None:
         windowed = self.match_history[self._window_cursor:]
         if windowed:
             match_hist_df = pd.DataFrame(windowed)
@@ -122,17 +127,17 @@ class LadderSim:
             match_hist_df = pd.DataFrame(columns=_MATCH_HISTORY_COLUMNS)
 
         while len(self.active_matches) < max_concurrent:
-            in_match = {bot for m in self.active_matches for bot in (m.bot_a, m.bot_b)}
+            playing = Counter(bot for m in self.active_matches for bot in (m.bot_a, m.bot_b))
             bots_snap = self.bots.copy()
             bots_snap["elo"] = bots_snap["bot_id"].map(self.ratings)
-            bots_snap["in_match"] = bots_snap["bot_id"].isin(in_match)
+            bots_snap["in_match"] = bots_snap["bot_id"].isin(playing)
 
-            # `available_bots` excludes data-enabled bots currently in a
-            # match (single-instance constraint). Non-data bots are always
-            # included — they can run many parallel instances on AI Arena.
+            # `available_bots` excludes bots already playing as many matches
+            # as they may: one for data-enabled bots (single instance),
+            # `max_parallel` for the others.
             available_bots = [
                 b for b in self.bot_ids
-                if not (self._bot_data_enabled[b] and b in in_match)
+                if playing[b] < self._parallel_limit(b, max_parallel)
             ]
             if len(available_bots) < 2:
                 break
@@ -141,7 +146,7 @@ class LadderSim:
             if pair is None:
                 break
             bot_a, bot_b = pair
-            self._validate_pair(bot_a, bot_b, in_match)
+            self._validate_pair(bot_a, bot_b, playing, max_parallel)
 
             elo_diff = abs(self.ratings[bot_a] - self.ratings[bot_b])
             outcome_a, duration, category = simulate_match(
@@ -157,24 +162,23 @@ class LadderSim:
             ))
 
     def _validate_pair(
-        self, bot_a: int, bot_b: int, in_match: set[int],
+        self, bot_a: int, bot_b: int, playing: Counter, max_parallel: int,
     ) -> None:
         """Raise if the matchmaker returned a physically invalid pair.
 
-        The sim accepts multiple concurrent matches for a bot iff it has
-        `bot_data_enabled == False` (non-data bots can run many parallel
-        instances on AI Arena). Data-enabled bots must be single-instance;
-        picking one that's already in flight is a hard error.
+        A data-enabled bot must be single-instance, and a bot without bot
+        data may play at most `max_parallel` matches at once; picking a bot
+        that's already at its limit is a hard error.
         """
         if bot_a == bot_b:
             raise ValueError(f"matchmaker returned self-match: {bot_a} vs {bot_a}")
         for bot in (bot_a, bot_b):
             if bot not in self._bot_data_enabled:
                 raise ValueError(f"matchmaker returned unknown bot_id: {bot}")
-            if self._bot_data_enabled[bot] and bot in in_match:
+            if playing[bot] >= self._parallel_limit(bot, max_parallel):
                 raise ValueError(
-                    f"matchmaker returned bot {bot} which is data-enabled "
-                    f"and currently in an active match"
+                    f"matchmaker returned bot {bot}, which is already playing "
+                    f"{playing[bot]} matches, its limit"
                 )
 
     def _advance(self, snapshot_interval: int, history_window_minutes: float) -> None:

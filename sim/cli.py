@@ -46,7 +46,9 @@ def add_common_args(parser: argparse.ArgumentParser, default_output_dir: Path) -
     parser.add_argument("--initial-elo", choices=["real", "flat"], default="real",
                         help="Start from the AI Arena ELOs in bots.csv (real) "
                              "or with every bot at 1600 (flat)")
-    parser.add_argument("--max-concurrent", type=int, default=12)
+    parser.add_argument("--max-concurrent", type=int, default=12, help="Server slots")
+    parser.add_argument("--max-parallel", type=int, default=4,
+                        help="Most matches a bot without bot data plays at once")
     parser.add_argument("--seeds", type=int, default=8, help="Number of independent runs")
     parser.add_argument("--jobs", type=int, default=os.cpu_count(),
                         help="Runs executed in parallel")
@@ -125,6 +127,7 @@ def _run_seed(
     sim.run(
         total_matches=args.total_matches,
         max_concurrent=args.max_concurrent,
+        max_parallel=args.max_parallel,
         elo_snapshot_interval=args.elo_snapshot_interval,
     )
 
