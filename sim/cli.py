@@ -39,9 +39,9 @@ def add_common_args(parser: argparse.ArgumentParser, default_output_dir: Path) -
     parser.add_argument("--data-dir", type=Path, default=DATA_DIR)
     parser.add_argument("--model-dir", type=Path, default=MODEL_DIR)
     parser.add_argument("--output-dir", type=Path, default=default_output_dir)
-    parser.add_argument("--total-matches", type=int, default=25000,
+    parser.add_argument("--total-matches", type=int, default=50000,
                         help="Matches per run, including the burn-in")
-    parser.add_argument("--burn-in", type=int, default=5000,
+    parser.add_argument("--burn-in", type=int, default=10000,
                         help="Leading matches of each run left out of the summary metrics")
     parser.add_argument("--initial-elo", choices=["real", "flat"], default="real",
                         help="Start from the AI Arena ELOs in bots.csv (real) "
@@ -56,7 +56,7 @@ def add_common_args(parser: argparse.ArgumentParser, default_output_dir: Path) -
                         help="Seed for the sim's RNG; run i uses this + i")
     parser.add_argument("--mm-seed", type=int, default=100,
                         help="Seed for the matchmaker's RNG; run i uses this + i")
-    parser.add_argument("--elo-snapshot-interval", type=int, default=500)
+    parser.add_argument("--elo-snapshot-interval", type=int, default=1000)
 
 
 def run_and_write(

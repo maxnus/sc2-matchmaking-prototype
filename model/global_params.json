@@ -1,14 +1,14 @@
 {
   "n_0": 5,
-  "p_normal": 0.930425,
-  "p_timelimit": 0.025184,
-  "p_abnormal": 0.044392,
-  "crash_rate": 0.022196,
-  "d": 0.01177,
-  "mu_0": 2.349308,
-  "sigma": 0.491916,
-  "sigma_within": 0.377764,
-  "n_0_duration": 1.437467,
-  "mu_abnormal": 2.154306,
-  "sigma_abnormal": 0.671177
+  "p_normal": 0.930354,
+  "p_timelimit": 0.03351,
+  "p_abnormal": 0.036136,
+  "crash_rate": 0.018068,
+  "d": 0.017869,
+  "mu_0": 2.407703,
+  "sigma": 0.514424,
+  "sigma_within": 0.360416,
+  "n_0_duration": 0.964128,
+  "mu_abnormal": 2.085541,
+  "sigma_abnormal": 0.810936
 }
