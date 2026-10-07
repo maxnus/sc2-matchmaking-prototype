@@ -71,19 +71,31 @@ ELO assumes that one number per bot describes every match-up, and that strength 
 
 ### Game categories
 
-Each simulated match is drawn in two stages. First its category: normal, time limit or abnormal. A pair's category probabilities $(p_\text{normal}, p_\text{timelimit}, p_\text{abnormal})$ follow a Dirichlet distribution, with the ladder-wide rates $\bar{p}$ as prior, updated with the pair's own counts $N$:
+Each simulated match is drawn in two stages. First its category: normal, time limit or abnormal. Ladder-wide, <!-- value: model.p_normal .1% --> of valid games are normal, <!-- value: model.p_timelimit .1% --> reach the time limit and <!-- value: model.p_abnormal .1% --> end abnormally, but abnormal games are mostly down to a few bots: <!-- value: data.crash_prone --> active bots crash or stop responding in more than 10% of their games (up to <!-- value: data.max_crash_rate .0% -->), while the median active bot does in <!-- value: data.median_crash_rate .1% -->.
+
+So each bot gets its own **crash rate** $c_i$: the ladder-wide rate of $\bar{c}$ = <!-- value: model.crash_rate .1% --> crashes per bot and game as prior, updated with the bot's $n_i$ games and $k_i$ crashes,
 
 $$
-\boldsymbol{\alpha}_\text{category} = \big(n_0\, \bar{p}_\text{normal} + N_\text{normal},\;\; n_0\, \bar{p}_\text{timelimit} + N_\text{timelimit},\;\; n_0\, \bar{p}_\text{abnormal} + N_\text{abnormal}\big).
+c_i = \frac{n_0\, \bar{c} + k_i}{n_0 + n_i}.
 $$
 
-Ladder-wide, <!-- value: model.p_normal .1% --> of valid games are normal, <!-- value: model.p_timelimit .1% --> reach the time limit and <!-- value: model.p_abnormal .1% --> end abnormally. The prior strength $n_0$ is <!-- value: model.n_0 --> games: once a pair has played that many, its own record weighs as much as the prior.
+The prior strength, $n_0$ = <!-- value: model.n_0 --> games, is the same for crash rates, game categories and match outcomes: once there are that many games, they weigh as much as the prior.
+
+A game between A and B ends abnormally if either bot crashes, which has probability $p_\text{crash} = 1 - (1 - c_\text{A})(1 - c_\text{B})$. Otherwise it reaches the time limit at the ladder-wide rate among games without a crash, $\bar{p}'_\text{tl} = \bar{p}_\text{timelimit} / (\bar{p}_\text{normal} + \bar{p}_\text{timelimit})$. This is the prior for the pair's category probabilities $(p_\text{normal}, p_\text{timelimit}, p_\text{abnormal})$, a Dirichlet distribution updated with the pair's own counts $N$:
+
+$$
+\boldsymbol{\alpha}_\text{category} = \big(n_0 (1 - p_\text{crash})(1 - \bar{p}'_\text{tl}) + N_\text{normal},\;\; n_0 (1 - p_\text{crash})\, \bar{p}'_\text{tl} + N_\text{timelimit},\;\; n_0\, p_\text{crash} + N_\text{abnormal}\big).
+$$
 
 Then, depending on the category:
 
 - **Normal:** the result and the duration are drawn from the pair's distributions below.
 - **Time limit:** the result is a draw and the game lasts 60 minutes.
-- **Abnormal:** the winner is drawn at random, and the duration from a ladder-wide log-normal distribution (see [Limitations](#limitations)).
+- **Abnormal:** the bot that crashed loses, and the duration is drawn from a ladder-wide log-normal distribution. Which bot crashed follows a Beta distribution with the two crash rates as prior, updated with the $C_\text{A}$ and $C_\text{B}$ games in which each crashed against the other:
+
+$$
+P(\text{A crashed} \mid \text{abnormal}) \sim \text{Beta}\Big(n_0 \frac{c_\text{A}}{c_\text{A} + c_\text{B}} + C_\text{A},\;\; n_0 \frac{c_\text{B}}{c_\text{A} + c_\text{B}} + C_\text{B}\Big).
+$$
 
 ### Match outcomes
 
@@ -151,7 +163,7 @@ Left: the log-durations of all real normal games, with the fitted normal distrib
 
 The simulator (`sim/ladder_sim.py`) is event-driven. The ladder has <!-- value: config.max_concurrent --> server slots. Whenever slots are free, the simulator asks the matchmaker for a pair of bots, draws the match's category, result and duration from the model, and starts it, until every slot is busy or the matchmaker declines. Then it jumps to the next match to finish, updates both bots' ratings with the ELO rule, and fills the free slot again.
 
-Bots with bot data can play only one match at a time; the others can play several in parallel. The real data agrees: <!-- value: data.single_instance_share .0% --> of the bots with bot data never had two matches running at once, while bots without it typically had up to <!-- value: data.parallel_median .0f --> at the same time.
+Bots with bot data play only one match at a time, the others at most <!-- value: config.max_parallel --> at once. The real data agrees: <!-- value: data.single_instance_share .0% --> of the bots with bot data never had two matches running at once, and bots without bot data spent <!-- value: data.parallel_within_cap .2% --> of their busy time in at most <!-- value: config.max_parallel --> matches.
 
 The simulator's clock runs on game time. In the real data, a match occupies its server for a median of <!-- value: data.wall_game_ratio .2f --> times its game time, so a simulated day corresponds to about that fraction of a real day. This scales every matchmaker's throughput alike, but absolute numbers per day are off by that factor.
 
@@ -161,7 +173,7 @@ Each matchmaker runs <!-- value: config.seeds --> times with different random se
 
 ### Ground truth and metrics
 
-Because every result is drawn from the model, the simulator knows each pair's **true expected score**: the probability of a win plus half the probability of a draw, counting time-limit games as draws and abnormal games as coin flips. From these we compute each bot's **true rating**: the ELO-scale ratings that best explain all true expected scores, with every pair weighted equally. As match-ups aren't transitive, no set of ratings reproduces every pair, but the true ratings are the best single number per bot. Their standard deviation is <!-- value: truth.rating_std .0f --> ELO points.
+Because every result is drawn from the model, the simulator knows each pair's **true expected score**: the probability of a win plus half the probability of a draw, counting time-limit games as draws and abnormal games as losses for the bot that crashed. From these we compute each bot's **true rating**: the ELO-scale ratings that best explain all true expected scores, with every pair weighted equally. As match-ups aren't transitive, no set of ratings reproduces every pair, but the true ratings are the best single number per bot. Their standard deviation is <!-- value: truth.rating_std .0f --> ELO points.
 
 The metrics are:
 
@@ -272,7 +284,7 @@ The components have different scales, so the weights also normalise them and can
 ### Findings
 
 - **Skill matching makes matches closer, but much less than the rating gap suggests.** With random pairing, the favourite's true expected score averages <!-- value: random.favourite_expected_score.mean .3f -->; round-robin, rung and stochastic bring it down to <!-- value: roundrobin.favourite_expected_score.mean .3f -->, <!-- value: rung.favourite_expected_score.mean .3f --> and <!-- value: stochastic.favourite_expected_score.mean .3f -->. On the simulation's own ratings, the gap between paired bots shrinks far more, from <!-- value: random.elo_diff.mean .0f --> to <!-- value: roundrobin.elo_diff.mean .0f --> ELO points. The ladder itself sets a floor: even bots whose true ratings are within <!-- value: truth.near_equal_gap --> points of each other give the favourite <!-- value: truth.near_equal_favourite .2f --> on average, where ELO would predict at most <!-- value: truth.near_equal_elo .2f -->, because so many match-ups are one-sided.
-- **Pairing by rating stretches the ratings; round-robin keeps stretching them.** Because neighbouring bots beat each other more decisively than their rating gap predicts, ratings learned mostly from close pairings spread out too far. Under rung and stochastic, the ELO spread ends up <!-- value: rung.rating_accuracy.spread_ratio_end .2f --> and <!-- value: stochastic.rating_accuracy.spread_ratio_end .2f --> times the true spread, changing little after the burn-in (random: <!-- value: random.rating_accuracy.spread_ratio_end .2f -->). Under round-robin it is still growing at the end of the run, at <!-- value: roundrobin.rating_accuracy.spread_ratio_end .2f -->, and its rating error is the largest. A likely cause is that bots only exchange rating within their division, while promotion and relegation pick the bots that are currently over- or underrated. The real AI Arena ratings are stretched too, <!-- value: truth.real_spread_ratio .2f --> times the true spread; since the model's prior is built from those ratings, this fits but doesn't prove the picture.
+- **Pairing by rating stretches the ratings; round-robin keeps stretching them.** Because neighbouring bots beat each other more decisively than their rating gap predicts, ratings learned mostly from close pairings spread out too far. Under rung and stochastic, the ELO spread ends up <!-- value: rung.rating_accuracy.spread_ratio_end .2f --> and <!-- value: stochastic.rating_accuracy.spread_ratio_end .2f --> times the true spread and grows only slowly after the burn-in (random: <!-- value: random.rating_accuracy.spread_ratio_end .2f -->). Under round-robin it keeps growing, to <!-- value: roundrobin.rating_accuracy.spread_ratio_end .2f --> at the end of the run, and its rating error is the largest. A likely cause is that bots only exchange rating within their division, while promotion and relegation pick the bots that are currently over- or underrated. The real AI Arena ratings are stretched too, <!-- value: truth.real_spread_ratio .2f --> times the true spread; since the model's prior is built from those ratings, this fits but doesn't prove the picture.
 - **Rounds cost throughput.** Waiting for the last matches of each round leaves servers idle: round-robin completes <!-- value: roundrobin.matches_per_day ,.0f --> matches per simulated day, rung <!-- value: rung.matches_per_day ,.0f -->, while random and stochastic, which don't wait for rounds, complete <!-- value: random.matches_per_day ,.0f --> and <!-- value: stochastic.matches_per_day ,.0f -->.
 - **Rung spreads matches unevenly.** Bots at either end of the ladder are in fewer rungs: the least-played bot gets <!-- value: rung.matches_per_bot.min .0f --> matches, against an average of <!-- value: rung.matches_per_bot.mean .0f -->.
 - **The stochastic matchmaker** keeps match counts nearly even (standard deviation <!-- value: stochastic.matches_per_bot.std .1f -->) and lets each bot meet <!-- value: stochastic.unique_opponents_per_bot.mean .1f --> distinct opponents on average, without rounds. Its matches are a little less close than round-robin's and rung's: the variety term makes up <!-- value: stochastic.score_components.s_var.pct .0f -->% of its score. Its weights were tuned while it still had a bug that ignored running matches, and should be tuned again.
@@ -319,8 +331,6 @@ How often each pair of bots played in the first run, after the burn-in. Rows and
 
 ## Limitations
 
-- **Crashes are coin flips.** In the data, the bot that crashes loses, and a few bots cause most of the crashes. The model doesn't track who crashes yet, so in the simulation a crash-prone bot wins half of its crashed games.
 - **Game time, not server time.** Matches occupy a server for their game time, while in reality they take about <!-- value: data.wall_game_ratio .2f --> times as long (see [above](#the-simulated-ladder)).
-- **No limit on parallel matches.** Bots without bot data can take any number of slots at once in the simulation, while in the real data they typically had at most <!-- value: data.parallel_median .0f --> matches running at the same time.
 - **Fixed probabilities.** Every pair plays with its posterior mean probabilities; the uncertainty of the fit doesn't carry over into the comparison. Drawing one set of probabilities per run would carry it over.
 - **A snapshot of the ladder.** The model treats the bots as unchanged over the <!-- value: data.n_days --> days of data, although bots get updated, and its prior uses the ratings at the time of fetching.
