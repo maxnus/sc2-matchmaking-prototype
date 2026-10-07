@@ -18,7 +18,7 @@ def main():
     add_common_args(parser, _own_dir / "output")
     args = parser.parse_args()
 
-    run_and_write(RandomMatchmaker(seed=args.mm_seed), args)
+    run_and_write(RandomMatchmaker, args)
 
 
 if __name__ == "__main__":

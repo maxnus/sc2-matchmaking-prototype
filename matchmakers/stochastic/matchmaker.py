@@ -1,5 +1,6 @@
 """Stochastic matchmaker: weighted skill/fairness/variety score with softmax sampling."""
 
+from collections import Counter, deque
 from dataclasses import dataclass
 from itertools import combinations
 from math import exp, inf, sqrt
@@ -17,6 +18,10 @@ class ScoringParams:
     tau: float = 15.0  # rank-difference tolerance (in rank positions)
     lam: float = 40.0
     temperature: float = 0.01  # softmax sampling temperature (0 = argmax)
+
+
+def _canonical(a: int, b: int) -> tuple[int, int]:
+    return (a, b) if a < b else (b, a)
 
 
 def f_skill(rank_a: int, rank_b: int, tau: float) -> float:
@@ -38,34 +43,48 @@ def f_var(a_ab: float, b_ab: float, lam: float) -> float:
 class StochasticMatchmaker:
     """Event-driven matchmaker with rematch prevention and softmax sampling.
 
-    Maintains internal bookkeeping derived from `match_history`:
-      - `_games_24h[bot]`: timestamps of completed matches in the last 24h
-      - `_gso[a][b]`: games played by `a` since last facing `b` (0 = rematch)
-      - `_total_games[bot]`: cumulative completed matches per bot
+    Maintains internal bookkeeping:
+      - `_games_24h[bot]`: completion times of the bot's matches in the last
+        24h of simulated time (the clock is the latest completion seen)
+      - `_in_flight[bot]`: matches dispatched but not yet completed
+      - `_in_flight_pairs[(lo, hi)]`: the same, per pair
+      - `_gso[a][b]`: games dispatched for `a` since it was last dispatched
+        against `b` (0 = rematch)
+      - `_total_games[bot]`: cumulative dispatched matches per bot
 
-    Rematch prevention: any pair where either bot's most recent opponent was
-    the other is excluded from scoring.
+    The sim fills every free slot in one go, before any of those matches
+    completes. Pair history and in-flight counts are therefore updated when a
+    pair is returned, not when it completes; otherwise the same pair, or the
+    same underplayed bot, would be picked for several slots at once. This
+    relies on the sim dispatching every pair the matchmaker returns.
+
+    Rematch prevention: any pair that is in flight, or where either bot's
+    most recently dispatched opponent was the other, is excluded from
+    scoring.
     """
 
     def __init__(self, params: ScoringParams, seed=None):
         self.params = params
         self.rng = np.random.default_rng(seed)
-        self._games_24h: dict[int, list[float]] = {}
+        self._games_24h: dict[int, deque[float]] = {}
+        self._in_flight: Counter[int] = Counter()
+        self._in_flight_pairs: Counter[tuple[int, int]] = Counter()
         self._gso: dict[int, dict[int, int]] = {}
         self._total_games: dict[int, int] = {}
         self._seen_mids: set[int] = set()
+        self._now = 0.0
         # Per-dispatch diagnostics. Index aligns with the sim's `match_id`
         # (matchmaker is called once per dispatch; we append on success).
         self.choice_log: list[dict[str, float]] = []
 
     def _ensure_bot(self, bot_id: int) -> None:
         if bot_id not in self._games_24h:
-            self._games_24h[bot_id] = []
+            self._games_24h[bot_id] = deque()
             self._gso[bot_id] = {}
             self._total_games[bot_id] = 0
 
     def _ingest_new_matches(self, match_history: pd.DataFrame) -> None:
-        """Update internal state from any match_history rows not yet seen.
+        """Record completions from any match_history rows not yet seen.
 
         The sim may pass a time-windowed DataFrame (shorter than the full
         history), so "new" rows can't be detected by length. Instead we
@@ -93,26 +112,45 @@ class StochasticMatchmaker:
 
             self._games_24h[a].append(end_time)
             self._games_24h[b].append(end_time)
-            cutoff = end_time - 24 * 60
-            self._games_24h[a] = [t for t in self._games_24h[a] if t > cutoff]
-            self._games_24h[b] = [t for t in self._games_24h[b] if t > cutoff]
+            self._now = max(self._now, end_time)
 
-            self._total_games[a] += 1
-            self._total_games[b] += 1
-            for opp in self._gso[a]:
-                self._gso[a][opp] += 1
-            self._gso[a][b] = 0
-            for opp in self._gso[b]:
-                self._gso[b][opp] += 1
-            self._gso[b][a] = 0
+            self._in_flight[a] -= 1
+            self._in_flight[b] -= 1
+            self._in_flight_pairs[_canonical(a, b)] -= 1
+
+    def _expire_old_games(self) -> None:
+        """Drop completions older than 24h from every bot's window.
+
+        Pruning against the global clock (not just when a bot plays again)
+        keeps the count of a bot that hasn't played lately from going stale.
+        """
+        cutoff = self._now - 24 * 60
+        for times in self._games_24h.values():
+            while times and times[0] <= cutoff:
+                times.popleft()
+
+    def _games_in_window(self, bot_id: int) -> int:
+        """Matches counted for fairness: completed in the last 24h, plus in flight."""
+        return len(self._games_24h[bot_id]) + self._in_flight[bot_id]
+
+    def _record_dispatch(self, bot_a: int, bot_b: int) -> None:
+        self._in_flight[bot_a] += 1
+        self._in_flight[bot_b] += 1
+        self._in_flight_pairs[_canonical(bot_a, bot_b)] += 1
+        for bot, opp in ((bot_a, bot_b), (bot_b, bot_a)):
+            self._total_games[bot] += 1
+            gso = self._gso[bot]
+            for other in gso:
+                gso[other] += 1
+            gso[opp] = 0
 
     def _score(
         self, bot_a: int, bot_b: int, ranks: dict[int, int], g_bar: float,
     ) -> tuple[float, dict[str, float]]:
         skill = f_skill(ranks[bot_a], ranks[bot_b], self.params.tau)
 
-        g_a = len(self._games_24h[bot_a])
-        g_b = len(self._games_24h[bot_b])
+        g_a = self._games_in_window(bot_a)
+        g_b = self._games_in_window(bot_b)
         fair = f_fair(g_a, g_b, g_bar)
 
         gso_a = self._gso[bot_a]
@@ -139,18 +177,20 @@ class StochasticMatchmaker:
         for b in all_bot_ids:
             self._ensure_bot(int(b))
         self._ingest_new_matches(match_history)
+        self._expire_old_games()
 
         ratings = dict(zip(bots["bot_id"], bots["elo"]))
         sorted_bots = sorted(all_bot_ids, key=lambda b: (-ratings[b], b))
         ranks = {b: i for i, b in enumerate(sorted_bots)}
 
-        g_bar = sum(len(self._games_24h[b]) for b in all_bot_ids) / len(all_bot_ids)
+        g_bar = sum(self._games_in_window(b) for b in all_bot_ids) / len(all_bot_ids)
 
         pairs: list[tuple[int, int]] = []
         scores: list[float] = []
         components_list: list[dict[str, float]] = []
         for a, b in combinations(available_bots, 2):
-            if self._gso[a].get(b) == 0 or self._gso[b].get(a) == 0:
+            if (self._in_flight_pairs[_canonical(a, b)] > 0
+                    or self._gso[a].get(b) == 0 or self._gso[b].get(a) == 0):
                 continue
             s, components = self._score(a, b, ranks, g_bar)
             pairs.append((a, b))
@@ -170,5 +210,6 @@ class StochasticMatchmaker:
             idx = int(np.argmax(scores))
 
         bot_a, bot_b = pairs[idx]
+        self._record_dispatch(bot_a, bot_b)
         self.choice_log.append({"score": scores[idx], **components_list[idx]})
         return bot_a, bot_b

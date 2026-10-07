@@ -1,139 +1,388 @@
 {
-  "total_matches": 20000,
-  "last_n_matches": 500,
-  "window_matches": 19603,
-  "matches_per_bot": {
-    "mean": 478.1,
-    "std": 53.7,
-    "min": 393,
-    "max": 578
+  "config": {
+    "total_matches": 25000,
+    "burn_in": 5000,
+    "initial_elo": "real",
+    "max_concurrent": 12,
+    "seeds": 8,
+    "sim_seed": 42,
+    "mm_seed": 100,
+    "elo_snapshot_interval": 500
   },
-  "unique_opponents_per_bot": {
-    "mean": 80.8,
-    "std": 0.5,
-    "min": 79,
-    "max": 81
-  },
-  "max_repeat_opponent": {
-    "mean": 13.0,
-    "std": 1.9,
-    "min": 10,
-    "max": 22
-  },
-  "elo_diff": {
-    "mean": 186.1,
-    "std": 147.2,
-    "median": 153.0
-  },
-  "duration_minutes": {
-    "mean": 11.89,
-    "std": 8.09
-  },
-  "category_rates": {
-    "normal": 0.935,
-    "abnormal": 0.0416,
-    "timelimit": 0.0235
-  },
-  "outcome_rates": {
-    "win": 0.48298729786257205,
-    "draw": 0.033413253073509154,
-    "loss": 0.4835994490639188
-  },
-  "simulated_time_minutes": 19854.06,
-  "elo_convergence": {
-    "elo_std_trajectory": [
-      {
-        "match_count": 0,
-        "elo_std": 0.0
-      },
-      {
-        "match_count": 1000,
-        "elo_std": 63.8
-      },
-      {
-        "match_count": 2000,
-        "elo_std": 99.6
-      },
-      {
-        "match_count": 3000,
-        "elo_std": 119.9
-      },
-      {
-        "match_count": 4000,
-        "elo_std": 138.1
-      },
-      {
-        "match_count": 5000,
-        "elo_std": 151.2
-      },
-      {
-        "match_count": 6000,
-        "elo_std": 158.9
-      },
-      {
-        "match_count": 7000,
-        "elo_std": 170.0
-      },
-      {
-        "match_count": 8000,
-        "elo_std": 177.1
-      },
-      {
-        "match_count": 9000,
-        "elo_std": 179.9
-      },
-      {
-        "match_count": 10000,
-        "elo_std": 183.0
-      },
-      {
-        "match_count": 11000,
-        "elo_std": 189.7
-      },
-      {
-        "match_count": 12000,
-        "elo_std": 192.4
-      },
-      {
-        "match_count": 13000,
-        "elo_std": 192.5
-      },
-      {
-        "match_count": 14000,
-        "elo_std": 193.2
-      },
-      {
-        "match_count": 15000,
-        "elo_std": 197.4
-      },
-      {
-        "match_count": 16000,
-        "elo_std": 196.7
-      },
-      {
-        "match_count": 17000,
-        "elo_std": 199.2
-      },
-      {
-        "match_count": 18000,
-        "elo_std": 201.6
-      },
-      {
-        "match_count": 19000,
-        "elo_std": 204.8
-      },
-      {
-        "match_count": 20000,
-        "elo_std": 203.9
-      }
-    ],
-    "matches_to_90pct": 11000,
-    "final_elo_std": 203.9,
-    "elo_stability": {
-      "mean": 29.8,
-      "std": 10.3,
-      "max": 56.0,
-      "n_snapshots": 10
+  "runs": [
+    "seed_0",
+    "seed_1",
+    "seed_2",
+    "seed_3",
+    "seed_4",
+    "seed_5",
+    "seed_6",
+    "seed_7"
+  ],
+  "metrics": {
+    "favourite_expected_score.mean": {
+      "mean": 0.779,
+      "ci95": 0.0007,
+      "values": [
+        0.7782,
+        0.7798,
+        0.7793,
+        0.7785,
+        0.7805,
+        0.7789,
+        0.7786,
+        0.7782
+      ]
+    },
+    "favourite_expected_score.median": {
+      "mean": 0.8058,
+      "ci95": 0.001,
+      "values": [
+        0.8039,
+        0.8068,
+        0.8068,
+        0.8061,
+        0.807,
+        0.8059,
+        0.804,
+        0.8062
+      ]
+    },
+    "lopsided_rate": {
+      "mean": 0.2192,
+      "ci95": 0.0016,
+      "values": [
+        0.2187,
+        0.2203,
+        0.2188,
+        0.2191,
+        0.2222,
+        0.2192,
+        0.2197,
+        0.2155
+      ]
+    },
+    "elo_diff.mean": {
+      "mean": 227.525,
+      "ci95": 2.6982,
+      "values": [
+        229.3,
+        231.8,
+        229.2,
+        226.7,
+        226.9,
+        229.5,
+        221.2,
+        225.6
+      ]
+    },
+    "elo_diff.std": {
+      "mean": 173.725,
+      "ci95": 2.6083,
+      "values": [
+        176.1,
+        177.3,
+        175.7,
+        172.3,
+        173.5,
+        174.6,
+        167.2,
+        173.1
+      ]
+    },
+    "elo_diff.median": {
+      "mean": 190.6125,
+      "ci95": 2.0334,
+      "values": [
+        191.1,
+        194.2,
+        191.6,
+        190.1,
+        190.7,
+        192.5,
+        186.3,
+        188.4
+      ]
+    },
+    "rating_accuracy.spearman": {
+      "mean": 0.9803,
+      "ci95": 0.001,
+      "values": [
+        0.9809,
+        0.9811,
+        0.9782,
+        0.9804,
+        0.9795,
+        0.9814,
+        0.9794,
+        0.9814
+      ]
+    },
+    "rating_accuracy.rmse": {
+      "mean": 37.2375,
+      "ci95": 0.7791,
+      "values": [
+        37.4,
+        38.2,
+        38.6,
+        37.5,
+        37.2,
+        37.0,
+        36.2,
+        35.8
+      ]
+    },
+    "matches_per_bot.mean": {
+      "mean": 487.8,
+      "ci95": 0.0,
+      "values": [
+        487.8,
+        487.8,
+        487.8,
+        487.8,
+        487.8,
+        487.8,
+        487.8,
+        487.8
+      ]
+    },
+    "matches_per_bot.std": {
+      "mean": 66.7625,
+      "ci95": 1.5544,
+      "values": [
+        65.3,
+        63.9,
+        67.1,
+        68.8,
+        68.8,
+        67.2,
+        68.1,
+        64.9
+      ]
+    },
+    "matches_per_bot.min": {
+      "mean": 389.625,
+      "ci95": 5.133,
+      "values": [
+        394,
+        398,
+        384,
+        388,
+        384,
+        387,
+        384,
+        398
+      ]
+    },
+    "matches_per_bot.max": {
+      "mean": 616.375,
+      "ci95": 7.8672,
+      "values": [
+        615,
+        604,
+        615,
+        611,
+        632,
+        629,
+        613,
+        612
+      ]
+    },
+    "unique_opponents_per_bot.mean": {
+      "mean": 80.6875,
+      "ci95": 0.0536,
+      "values": [
+        80.8,
+        80.7,
+        80.6,
+        80.7,
+        80.6,
+        80.7,
+        80.7,
+        80.7
+      ]
+    },
+    "unique_opponents_per_bot.std": {
+      "mean": 0.5625,
+      "ci95": 0.0887,
+      "values": [
+        0.5,
+        0.5,
+        0.6,
+        0.5,
+        0.8,
+        0.5,
+        0.6,
+        0.5
+      ]
+    },
+    "unique_opponents_per_bot.min": {
+      "mean": 78.75,
+      "ci95": 0.387,
+      "values": [
+        79,
+        79,
+        78,
+        79,
+        78,
+        79,
+        79,
+        79
+      ]
+    },
+    "unique_opponents_per_bot.max": {
+      "mean": 81.0,
+      "ci95": 0.0,
+      "values": [
+        81,
+        81,
+        81,
+        81,
+        81,
+        81,
+        81,
+        81
+      ]
+    },
+    "max_repeat_opponent.mean": {
+      "mean": 13.2625,
+      "ci95": 0.1544,
+      "values": [
+        13.5,
+        13.0,
+        13.5,
+        13.2,
+        13.2,
+        13.2,
+        13.1,
+        13.4
+      ]
+    },
+    "max_repeat_opponent.std": {
+      "mean": 1.9375,
+      "ci95": 0.2319,
+      "values": [
+        1.8,
+        1.4,
+        2.2,
+        2.3,
+        1.9,
+        1.9,
+        1.9,
+        2.1
+      ]
+    },
+    "max_repeat_opponent.min": {
+      "mean": 10.0,
+      "ci95": 0.0,
+      "values": [
+        10,
+        10,
+        10,
+        10,
+        10,
+        10,
+        10,
+        10
+      ]
+    },
+    "max_repeat_opponent.max": {
+      "mean": 19.125,
+      "ci95": 1.576,
+      "values": [
+        18,
+        16,
+        21,
+        22,
+        20,
+        18,
+        19,
+        19
+      ]
+    },
+    "matches_per_day": {
+      "mean": 1353.5625,
+      "ci95": 7.54,
+      "values": [
+        1366.6,
+        1346.0,
+        1339.3,
+        1351.6,
+        1362.9,
+        1349.1,
+        1354.2,
+        1358.8
+      ]
+    },
+    "duration_minutes.mean": {
+      "mean": 12.7662,
+      "ci95": 0.0729,
+      "values": [
+        12.64,
+        12.84,
+        12.9,
+        12.79,
+        12.67,
+        12.81,
+        12.76,
+        12.72
+      ]
+    },
+    "duration_minutes.std": {
+      "mean": 9.5775,
+      "ci95": 0.1123,
+      "values": [
+        9.44,
+        9.7,
+        9.81,
+        9.59,
+        9.45,
+        9.56,
+        9.63,
+        9.44
+      ]
+    },
+    "category_rates.normal": {
+      "mean": 0.9342,
+      "ci95": 0.001,
+      "values": [
+        0.9335,
+        0.935,
+        0.9325,
+        0.9331,
+        0.9357,
+        0.9335,
+        0.9347,
+        0.9354
+      ]
+    },
+    "category_rates.abnormal": {
+      "mean": 0.042,
+      "ci95": 0.0008,
+      "values": [
+        0.0434,
+        0.0404,
+        0.0415,
+        0.0427,
+        0.0413,
+        0.043,
+        0.0414,
+        0.042
+      ]
+    },
+    "category_rates.timelimit": {
+      "mean": 0.0239,
+      "ci95": 0.0009,
+      "values": [
+        0.0231,
+        0.0245,
+        0.0261,
+        0.0243,
+        0.023,
+        0.0236,
+        0.0239,
+        0.0226
+      ]
     }
   }
 }

@@ -13,7 +13,7 @@ from typing import NamedTuple
 import numpy as np
 import pandas as pd
 
-from sim.common import simulate_match, update_elo
+from sim.common import GlobalParams, simulate_match, update_elo
 from sim.matchmaker import Matchmaker
 
 
@@ -45,7 +45,7 @@ class LadderSim:
     """Event-driven ladder simulator with a pluggable matchmaker.
 
     Usage:
-        sim = LadderSim(matchmaker, bots, gp, lookup, rng)
+        sim = LadderSim(matchmaker, bots, gp, lookup, seed=42)
         sim.run(total_matches=20000)
         # Outputs: sim.match_history, sim.elo_snapshots, sim.ratings, sim.current_time
 
@@ -56,15 +56,19 @@ class LadderSim:
     `time_start` / `time_end` / `elo_diff` in `match_history` are stored at
     full precision so the matchmaker can derive state (e.g., 24h windows)
     without rounding drift. CLI callers round them when writing CSV.
+
+    Ratings start at `initial_ratings` (bot_id → ELO) if given, otherwise
+    every bot starts at 1600.
     """
 
     def __init__(
         self,
         matchmaker: Matchmaker,
         bots: pd.DataFrame,
-        global_params: dict,
+        global_params: GlobalParams,
         matchup_lookup: dict,
         seed=None,
+        initial_ratings: dict[int, float] | None = None,
     ):
         self.matchmaker = matchmaker
         self.bots = bots
@@ -77,7 +81,10 @@ class LadderSim:
             zip(bots["bot_id"], bots["bot_data_enabled"].astype(bool))
         )
 
-        self.ratings: dict[int, float] = {b: 1600.0 for b in self.bot_ids}
+        self.ratings: dict[int, float] = {
+            b: float(initial_ratings[b]) if initial_ratings else 1600.0
+            for b in self.bot_ids
+        }
         self.current_time = 0.0
         self.active_matches: list[_ActiveMatch] = []  # min-heap by end_time
         self.match_history: list[dict] = []
