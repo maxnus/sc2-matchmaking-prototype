@@ -76,6 +76,62 @@ class MatchupParams:
     sigma_duration: float
 
 
+# --- Raw match data ---
+
+
+# Result types that never produced a real game
+INVALID_RESULTS = {"InitializationError", "MatchCancelled", "Error"}
+
+# Result types where bot1 wins / bot2 wins (for normal games)
+BOT1_WINS = {"Player1Win"}
+BOT1_LOSES = {"Player2Win"}
+
+# Abnormal terminations (crash or bot-level timeout)
+ABNORMAL_RESULTS = {"Player1Crash", "Player2Crash", "Player1TimeOut", "Player2TimeOut"}
+# Within abnormal: bot1 wins if the OTHER bot crashed/timed out
+ABNORMAL_BOT1_WINS = {"Player2Crash", "Player2TimeOut"}
+
+
+def preprocess_matches(matches: pd.DataFrame) -> pd.DataFrame:
+    """Filter to valid games, classify categories, canonicalize bot ordering."""
+    invalid = matches["result_type"].isin(INVALID_RESULTS)
+    log.info("Dropping %d invalid results (%s)", invalid.sum(),
+             ", ".join(INVALID_RESULTS))
+    df = matches[~invalid].copy()
+
+    df["category"] = Category.NORMAL
+    df.loc[df["is_timeout"] == True, "category"] = Category.TIMELIMIT
+    df.loc[df["result_type"].isin(ABNORMAL_RESULTS), "category"] = Category.ABNORMAL
+
+    df["bot1_outcome"] = None
+    normal = df["category"] == Category.NORMAL
+    df.loc[normal & df["result_type"].isin(BOT1_WINS), "bot1_outcome"] = Outcome.WIN
+    df.loc[normal & df["result_type"].isin(BOT1_LOSES), "bot1_outcome"] = Outcome.LOSS
+    df.loc[normal & (df["result_type"] == "Tie"), "bot1_outcome"] = Outcome.DRAW
+
+    df["bot_lo"] = df[["bot1_id", "bot2_id"]].min(axis=1).astype(int)
+    df["bot_hi"] = df[["bot1_id", "bot2_id"]].max(axis=1).astype(int)
+
+    flipped = df["bot1_id"] != df["bot_lo"]
+    df["lo_outcome"] = df["bot1_outcome"]
+    df.loc[flipped & (df["bot1_outcome"] == Outcome.WIN), "lo_outcome"] = Outcome.LOSS
+    df.loc[flipped & (df["bot1_outcome"] == Outcome.LOSS), "lo_outcome"] = Outcome.WIN
+
+    abnormal = df["category"] == Category.ABNORMAL
+    bot1_wins_abnormal = df["result_type"].isin(ABNORMAL_BOT1_WINS)
+    df.loc[abnormal & bot1_wins_abnormal & ~flipped, "lo_outcome"] = Outcome.WIN
+    df.loc[abnormal & bot1_wins_abnormal & flipped, "lo_outcome"] = Outcome.LOSS
+    df.loc[abnormal & ~bot1_wins_abnormal & ~flipped, "lo_outcome"] = Outcome.LOSS
+    df.loc[abnormal & ~bot1_wins_abnormal & flipped, "lo_outcome"] = Outcome.WIN
+
+    log.info("Valid games: %d (normal=%d, timelimit=%d, abnormal=%d)",
+             len(df),
+             (df["category"] == Category.NORMAL).sum(),
+             (df["category"] == Category.TIMELIMIT).sum(),
+             (df["category"] == Category.ABNORMAL).sum())
+    return df
+
+
 # --- Model loading ---
 
 

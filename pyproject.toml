@@ -4,6 +4,8 @@ version = "0.1.0"
 requires-python = ">=3.11"
 dependencies = [
     "aiarena-api>=0.1.2,<0.2",
+    "markdown-it-py",
+    "mdit-py-plugins",
     "numpy",
     "pandas",
     "plotly",
@@ -13,7 +15,6 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "python-dotenv",
-    "jupyter",
 ]
 
 [build-system]

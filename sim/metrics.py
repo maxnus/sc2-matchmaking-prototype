@@ -30,6 +30,7 @@ HEADLINE_METRICS = [
     ("elo_diff.mean", "|ΔELO| at dispatch (sim's own ratings)", ".0f", "lower"),
     ("rating_accuracy.spearman", "Rating accuracy: Spearman ρ vs true ratings", ".3f", "higher"),
     ("rating_accuracy.rmse", "Rating accuracy: RMSE vs true ratings (ELO)", ".1f", "lower"),
+    ("rating_accuracy.spread_ratio_end", "ELO spread ÷ true spread, end of run", ".2f", "closer to 1"),
     ("matches_per_bot.min", "Fewest matches played by any bot", ".0f", "higher"),
     ("matches_per_bot.std", "Std of matches per bot", ".1f", "lower"),
     ("unique_opponents_per_bot.mean", "Distinct opponents per bot", ".1f", "higher"),
@@ -89,18 +90,22 @@ class GroundTruth:
         e = self.matrix[i, j]
         return np.maximum(e, 1.0 - e)
 
-    def rating_accuracy(self, ratings: dict[int, float]) -> tuple[float, float]:
-        """Spearman ρ and RMSE (ELO points) of `ratings` against the true ratings.
+    def rating_accuracy(self, ratings: dict[int, float]) -> dict[str, float]:
+        """How well `ratings` match the true ratings.
 
-        `ratings` are centred first, since the sim's keep whatever mean they
-        started with.
+        Returns the Spearman ρ, the RMSE in ELO points, and the ratio of the
+        two spreads (standard deviations), which is above 1 when ratings are
+        stretched relative to the truth. `ratings` are centred first, since
+        the sim's keep whatever mean they started with.
         """
         sim = np.array([ratings[b] for b in self.bot_ids], dtype=float)
         sim -= sim.mean()
         true = np.array([self.ratings[b] for b in self.bot_ids])
-        rho = float(stats.spearmanr(sim, true).statistic)
-        rmse = sqrt(float(np.mean((sim - true) ** 2)))
-        return rho, rmse
+        return {
+            "spearman": float(stats.spearmanr(sim, true).statistic),
+            "rmse": sqrt(float(np.mean((sim - true) ** 2))),
+            "spread_ratio": float(sim.std() / true.std()),
+        }
 
 
 def _fit_ratings(matrix: np.ndarray) -> np.ndarray:
@@ -138,8 +143,8 @@ def compute_summary(
 
     `matches` is the sim's match history (completion order) and
     `elo_snapshots` its ELO snapshots. The rating-accuracy trajectory covers
-    the whole run; its summary metric averages the snapshots taken after the
-    burn-in.
+    the whole run; its summary metrics average the snapshots taken after the
+    burn-in, except the spread ratio, which is taken at the end of the run.
     """
     bot_ids = truth.bot_ids
     window = matches.iloc[burn_in:]
@@ -159,11 +164,12 @@ def compute_summary(
 
     trajectory = []
     for match_count, snap in elo_snapshots.groupby("match_count"):
-        rho, rmse = truth.rating_accuracy(dict(zip(snap["bot_id"], snap["elo"])))
+        accuracy = truth.rating_accuracy(dict(zip(snap["bot_id"], snap["elo"])))
         trajectory.append({
             "match_count": int(match_count),
-            "spearman": round(rho, 4),
-            "rmse": round(rmse, 1),
+            "spearman": round(accuracy["spearman"], 4),
+            "rmse": round(accuracy["rmse"], 1),
+            "spread_ratio": round(accuracy["spread_ratio"], 4),
         })
     settled = [p for p in trajectory if p["match_count"] >= burn_in]
 
@@ -181,6 +187,7 @@ def compute_summary(
         "rating_accuracy": {
             "spearman": round(float(np.mean([p["spearman"] for p in settled])), 4),
             "rmse": round(float(np.mean([p["rmse"] for p in settled])), 1),
+            "spread_ratio_end": trajectory[-1]["spread_ratio"],
         },
         "matches_per_bot": _describe(matches_per_bot),
         "unique_opponents_per_bot": _describe(unique_opp),

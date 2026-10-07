@@ -2,10 +2,15 @@
 
 Prototype for matchmaking on AI Arena
 
-## Analysis report
+## Report
 
-The analysis report is rendered via GitHub Pages:
+The data, the ladder model, the simulation, the matchmakers and the results are described on one page,
+rendered via GitHub Pages:
 [maxnus.github.io/sc2-matchmaking-prototype/analysis/report.html](https://maxnus.github.io/sc2-matchmaking-prototype/analysis/report.html)
+
+Its text lives in [`analysis/report.md`](analysis/report.md), Markdown with TeX maths, and
+`analysis/analysis.py` turns it into `analysis/report.html`, filling in the figures and every number
+quoted in the text from the data, the model and the simulation runs.
 
 ## Running
 
@@ -14,7 +19,7 @@ pip install -e .
 python data/fetch.py                       # optional: refresh data/ (needs AIARENA_API_TOKEN, e.g. in .env)
 python model/fit.py                        # refit the outcome model in model/
 python matchmakers/stochastic/simulate.py  # likewise for random, roundrobin, rung
-python analysis/analysis.py                # writes analysis/report.html
+python analysis/analysis.py                # writes analysis/report.html from analysis/report.md
 ```
 
 Each `simulate.py` runs `--seeds` independent simulations (default 8, in parallel) of
