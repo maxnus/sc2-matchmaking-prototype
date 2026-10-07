@@ -319,13 +319,13 @@ Each dot is one bot in the first run, after the burn-in: the number of matches i
 
 ### Opponent variety
 
-<!-- figure: opponent-concentration -->
+<!-- figure: distinct-opponents -->
 
-For each bot, its opponents are sorted by the number of matches against them, most first, and the curve follows the cumulative share of the bot's matches, after the burn-in. Each line is the median over bots and runs, the band the interquartile range. The dashed diagonal is perfect equality, every opponent faced equally often; a curve bowed towards the top left means a few opponents dominate a bot's schedule.
+How many different opponents a bot meets: the distinct opponents it has played, against the number of games since the burn-in. Lines are the median over bots and runs, bands the interquartile range. A line that flattens out means bots keep meeting the same group of opponents; under round-robin, that group is mostly the bot's own division. Random pairing climbs fastest, but by pairing bots of any strength (see [How close are the matches?](#how-close-are-the-matches)).
 
-<!-- figure: opponent-mean-vs-max -->
+<!-- figure: rematch-gaps -->
 
-Each dot is one bot in the first run, after the burn-in: the mean number of matches against each of its opponents, and the number against its most frequent one. Hover over a dot to see the bot.
+How soon a bot meets the same opponent again. For every repeat meeting, we count the games the bot played since the two last met; each line shows the share of repeat meetings that came within that many games (note the logarithmic axis). Round-robin's steep rise is the length of a round: two bots in the same division meet once per round. The stochastic matchmaker never pairs two bots that have just played each other, and its variety term pushes repeats further out.
 
 ### Who plays whom
 

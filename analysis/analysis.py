@@ -493,102 +493,72 @@ def plot_matches_per_bot(
     return _style(fig, 460)
 
 
-def plot_opponent_mean_vs_max(
-    sims: list[SimResult], bot_ids: list[int], bot_names: dict[int, str],
-) -> go.Figure:
-    """Scatter of per-bot mean-matches-per-opponent vs max-matches-against-any-opponent."""
+def _schedules(matches: pd.DataFrame) -> pd.DataFrame:
+    """Each bot's matches in the order it played them: one row per bot and
+    match, with its opponent and `game`, the bot's 1st, 2nd, ... game."""
+    sides = pd.concat([
+        matches[["match_id", "time_start", "bot_a", "bot_b"]].rename(columns={"bot_a": "bot", "bot_b": "opp"}),
+        matches[["match_id", "time_start", "bot_b", "bot_a"]].rename(columns={"bot_b": "bot", "bot_a": "opp"}),
+    ]).sort_values(["bot", "time_start", "match_id"], ignore_index=True)
+    sides["game"] = sides.groupby("bot").cumcount() + 1
+    return sides
+
+
+def plot_distinct_opponents(sims: list[SimResult]) -> go.Figure:
+    """Distinct opponents a bot has met against the games it has played,
+    median and interquartile band over bots and runs."""
     fig = go.Figure()
     for sim in sims:
-        bot_opp: dict[int, list[int]] = {b: [] for b in bot_ids}
-        for (a, c), count in _pair_counts(sim.runs[0].matches).items():
-            bot_opp[a].append(count)
-            bot_opp[c].append(count)
-
-        means, maxes, names = [], [], []
-        for b in bot_ids:
-            counts = bot_opp[b]
-            if not counts:
-                continue
-            means.append(float(np.mean(counts)))
-            maxes.append(max(counts))
-            names.append(bot_names[b])
-
-        fig.add_trace(go.Scatter(
-            x=means, y=maxes, mode="markers", name=sim.name,
-            marker=dict(color=sim.color, size=8, opacity=0.6),
-            text=names,
-            hovertemplate="%{text}<br>Mean: %{x:.2f}<br>Max: %{y}<extra></extra>",
-        ))
-    fig.update_layout(
-        xaxis_title="Mean matches per opponent",
-        yaxis_title="Max matches against a single opponent",
-    )
-    return _style(fig, 460)
-
-
-def plot_opponent_concentration(
-    sims: list[SimResult], bot_ids: list[int],
-) -> go.Figure:
-    """For each bot in each run, sort its opponents by games played (most
-    first) and compute cumulative match-share. Aggregate across bots and
-    runs per matchmaker as median + interquartile band.
-
-    A curve close to the diagonal = bots spread matches evenly. A curve
-    bowed upwards = a few opponents dominate each bot's matches.
-    """
-    fig = go.Figure()
-    x_grid = np.linspace(0.0, 1.0, 51)  # 0, 0.02, ..., 1.0
-
-    for sim in sims:
-        resampled = []
+        curves, games_per_bot = [], []
         for run in sim.runs:
-            bot_opp: dict[int, dict[int, int]] = {b: {} for b in bot_ids}
-            for (a, b), c in _pair_counts(run.matches).items():
-                bot_opp[a][b] = c
-                bot_opp[b][a] = c
-
-            for b in bot_ids:
-                counts = sorted(bot_opp[b].values(), reverse=True)
-                if not counts:
-                    continue
-                total = sum(counts)
-                n = len(counts)
-                # Curve: (0, 0), (1/n, c1/total), (2/n, (c1+c2)/total), ..., (1, 1)
-                xs = [0.0] + [(i + 1) / n for i in range(n)]
-                ys = [0.0] + list(np.cumsum(counts) / total)
-                resampled.append(np.interp(x_grid, xs, ys))
-
-        arr = np.asarray(resampled)
-        median = np.median(arr, axis=0)
-        q25 = np.quantile(arr, 0.25, axis=0)
-        q75 = np.quantile(arr, 0.75, axis=0)
-
-        # IQR band (drawn first, below the median line)
+            sides = _schedules(run.matches)
+            sides["distinct"] = (~sides.duplicated(["bot", "opp"])).groupby(sides["bot"]).cumsum()
+            curves.append(sides[["game", "distinct"]])
+            games_per_bot.append(sides.groupby("bot")["game"].max())
+        curves = pd.concat(curves)
+        # Stop where fewer than 90% of the bots have played that many games,
+        # so the median doesn't drift towards the busiest bots.
+        last_game = int(pd.concat(games_per_bot).quantile(0.1))
+        stats = curves[curves["game"] <= last_game].groupby("game")["distinct"].quantile([0.25, 0.5, 0.75]).unstack()
+        x = stats.index.to_numpy()
         fig.add_trace(go.Scatter(
-            x=list(x_grid) + list(x_grid[::-1]),
-            y=list(q75) + list(q25[::-1]),
-            fill="toself",
-            fillcolor=sim.color, opacity=0.15,
-            line=dict(width=0),
-            name=f"{sim.name} IQR", showlegend=False, hoverinfo="skip",
+            x=np.concatenate([x, x[::-1]]),
+            y=np.concatenate([stats[0.75].to_numpy(), stats[0.25].to_numpy()[::-1]]),
+            fill="toself", fillcolor=sim.color, opacity=0.15, line=dict(width=0),
+            showlegend=False, hoverinfo="skip",
         ))
         fig.add_trace(go.Scatter(
-            x=x_grid, y=median, mode="lines",
-            name=sim.name, line=dict(color=sim.color, width=2),
+            x=x, y=stats[0.5].to_numpy(), mode="lines", name=sim.name,
+            line=dict(color=sim.color, width=2),
+            hovertemplate="%{x} games: %{y:.0f} distinct opponents<extra>" + sim.name + "</extra>",
         ))
+    fig.update_layout(xaxis_title="Games played since the burn-in", yaxis_title="Distinct opponents met")
+    return _style(fig, 440)
 
-    # Diagonal = perfect equality (each opponent faced equally often).
-    fig.add_trace(go.Scatter(
-        x=[0, 1], y=[0, 1], mode="lines", name="Perfect equality",
-        line=dict(color="gray", dash="dash", width=1), hoverinfo="skip",
-    ))
+
+def plot_rematch_gaps(sims: list[SimResult]) -> go.Figure:
+    """Cumulative share of repeat meetings by the number of games since the
+    pair's previous meeting, counted in the bot's own games."""
+    fig = go.Figure()
+    for sim in sims:
+        gaps = []
+        for run in sim.runs:
+            sides = _schedules(run.matches)
+            gaps.append((sides["game"] - sides.groupby(["bot", "opp"])["game"].shift()).dropna().to_numpy())
+        gaps = np.sort(np.concatenate(gaps))
+        x = np.arange(1, int(gaps.max()) + 1)
+        share = np.searchsorted(gaps, x, side="right") / len(gaps)
+        fig.add_trace(go.Scatter(
+            x=x, y=share, mode="lines", line_shape="hv", name=sim.name,
+            line=dict(color=sim.color, width=2),
+            hovertemplate="within %{x} games: %{y:.0%}<extra>" + sim.name + "</extra>",
+        ))
     fig.update_layout(
-        xaxis_title="Fraction of opponents (sorted by games played, most first)",
-        yaxis_title="Fraction of bot's matches",
-        xaxis=dict(range=[0, 1]),
-        yaxis=dict(range=[0, 1]),
+        xaxis=dict(title="Games since the two bots last met", type="log",
+                   tickvals=[1, 2, 5, 10, 20, 50, 100, 200, 500]),
+        yaxis=dict(title="Share of repeat meetings", tickformat=".0%", range=[0, 1]),
     )
-    return _style(fig, 460)
+    return _style(fig, 440)
 
 
 def plot_matchup_heatmap(
@@ -896,8 +866,8 @@ def main():
         "elo-diff": _figure_html(plot_elo_diff(sims)),
         "rating-accuracy": _figure_html(plot_rating_accuracy(sims, burn_in)),
         "matches-per-bot": _figure_html(plot_matches_per_bot(sims, bot_ids, bot_names)),
-        "opponent-concentration": _figure_html(plot_opponent_concentration(sims, bot_ids)),
-        "opponent-mean-vs-max": _figure_html(plot_opponent_mean_vs_max(sims, bot_ids, bot_names)),
+        "distinct-opponents": _figure_html(plot_distinct_opponents(sims)),
+        "rematch-gaps": _figure_html(plot_rematch_gaps(sims)),
         "heatmaps": heatmaps(sims, bot_names, truth),
     }
 
