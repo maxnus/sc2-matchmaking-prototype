@@ -8,7 +8,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pandas as pd
-from aiarena_api import AiArenaClient
+from aiarena_api import TOKEN_ENV, AiArenaClient
+from aiarena_api.schema import Match, Round
 
 # --- .env loading ---
 
@@ -77,12 +78,11 @@ async def fetch_bots(client: AiArenaClient, competition: int) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-async def fetch_rounds(client: AiArenaClient, competition: int, since: datetime) -> list[dict]:
+async def fetch_rounds(client: AiArenaClient, competition: int, since: datetime) -> list[Round]:
     """Fetch all rounds for a competition that started after the given date."""
     log.info("Fetching rounds for competition %d...", competition)
     rounds = [r async for r in client.list_rounds(competition)]
-    since_str = since.isoformat()
-    recent = [r for r in rounds if r.get("started") and r["started"] >= since_str]
+    recent = [r for r in rounds if r.get("started") and datetime.fromisoformat(r["started"]) >= since]
     log.info("  %d total rounds, %d in the last %d days",
              len(rounds), len(recent),
              (datetime.now(timezone.utc) - since).days)
@@ -98,18 +98,25 @@ async def fetch_matches(client: AiArenaClient, days: int, competition: int) -> p
         log.warning("No rounds found in the last %d days", days)
         return pd.DataFrame()
 
-    all_matches = []
-    for i, rnd in enumerate(rounds, 1):
-        log.info("  Fetching matches for round %s (%d/%d)...",
-                 rnd["number"], i, len(rounds))
-        all_matches.extend([m async for m in client.list_matches_for_round(rnd["id"])])
+    done = 0
+
+    async def round_matches(rnd: Round) -> list[Match]:
+        nonlocal done
+        matches = [m async for m in client.list_matches_for_round(rnd["id"])]
+        done += 1
+        log.info("  Fetched %d matches of round %s (%d/%d)", len(matches), rnd["number"], done, len(rounds))
+        return matches
+
+    # Rounds are read concurrently, as many requests at a time as the client allows; gather keeps their order.
+    per_round = await asyncio.gather(*(round_matches(rnd) for rnd in rounds))
+    all_matches = [m for matches in per_round for m in matches]
 
     log.info("  %d total matches fetched", len(all_matches))
 
     return _process_matches(all_matches)
 
 
-def _process_matches(matches: list[dict]) -> pd.DataFrame:
+def _process_matches(matches: list[Match]) -> pd.DataFrame:
     """Process raw match dicts into a clean DataFrame."""
     rows = []
     skipped = 0
@@ -171,6 +178,9 @@ def main():
     parser.add_argument("--competition", type=int, default=36, help="Competition ID (default: 36)")
     parser.add_argument("--output-dir", type=Path, default=_own_dir, help="Output directory (default: data/)")
     args = parser.parse_args()
+
+    if not os.environ.get(TOKEN_ENV):
+        raise SystemExit(f"{TOKEN_ENV} not set. Put it in a .env file in {_repo_root}, or set it in the environment.")
 
     bots_df, matches_df = asyncio.run(_fetch(args.days, args.competition))
 
