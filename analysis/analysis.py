@@ -13,7 +13,9 @@ The text lives in `report.md` next to this script: Markdown with TeX maths
 
 Each output dir holds one matchmaker's runs (`seed_*/`) and their aggregate
 `summary.json`, as written by `sim.cli.run_and_write`; its name is taken
-from the folder (e.g. `matchmakers/stochastic/output` → `stochastic`).
+from the folder (e.g. `matchmakers/stochastic/output` → `stochastic`). A
+matchmaker can have further parameter settings in `output-<setting>` dirs
+next to `output/`, named `<matchmaker>-<setting>` on the page.
 Writes `report.html`, with a contents sidebar built from the `##` and `###`
 headings.
 """
@@ -79,8 +81,14 @@ class SimResult:
 
 
 def _infer_name(d: Path) -> str:
-    """`matchmakers/stochastic/output` → `stochastic`; otherwise the dir name."""
-    return d.parent.name if d.name == "output" else d.name
+    """`matchmakers/stochastic/output` → `stochastic`,
+    `matchmakers/stochastic/output-skill-0.1` → `stochastic-skill-0.1`;
+    otherwise the dir name."""
+    if d.name == "output":
+        return d.parent.name
+    if d.name.startswith("output-"):
+        return f"{d.parent.name}-{d.name.removeprefix('output-')}"
+    return d.name
 
 
 def load_simulation(sim_dir: Path, name: str, color: str) -> SimResult:
@@ -711,7 +719,7 @@ figure.plot { margin: 18px 0 8px; }
 article details { border: 1px solid var(--border); border-radius: 8px; padding: 6px 14px; margin: 10px 0; }
 article details > summary { cursor: pointer; font-weight: 500; padding: 4px 0; }
 table.summary td { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
-table.summary thead th { text-align: right; }
+table.summary thead th { text-align: right; white-space: nowrap; }
 table.summary th:first-child { text-align: left; font-weight: normal; min-width: 240px; }
 .muted { color: var(--muted); font-size: 0.85em; font-weight: normal; }
 @media (max-width: 999px) {
@@ -810,11 +818,12 @@ def write_page(title: str, body: str, contents: list[tuple[int, str, str]], path
 
 
 def _discover_matchmaker_dirs() -> list[Path]:
-    """Find `matchmakers/*/output` dirs that have an aggregate summary.json."""
+    """Find `matchmakers/*/output` and `matchmakers/*/output-*` dirs that
+    have an aggregate summary.json."""
     root = REPO_ROOT / "matchmakers"
     return sorted(
-        d / "output" for d in root.iterdir()
-        if d.is_dir() and (d / "output" / "summary.json").exists()
+        out for d in root.iterdir() if d.is_dir()
+        for out in d.glob("output*") if (out / "summary.json").exists()
     )
 
 
@@ -822,7 +831,7 @@ def main():
     parser = argparse.ArgumentParser(description="Build the project report")
     parser.add_argument("dirs", type=Path, nargs="*",
                         help="Simulation output directories (default: every "
-                             "`matchmakers/*/output` with a summary.json)")
+                             "`matchmakers/*/output*` with a summary.json)")
     parser.add_argument("--data-dir", type=Path, default=DATA_DIR)
     parser.add_argument("--model-dir", type=Path, default=MODEL_DIR)
     parser.add_argument("--source", type=Path, default=_own_dir / "report.md")

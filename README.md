@@ -29,3 +29,11 @@ ELOs (`--initial-elo flat` starts every bot at 1600 instead). The first `--burn-
 (default 10,000) are left out of the metrics. Runs are scored against the outcome model's true
 expected scores and ratings (`sim/metrics.py`), not only against the sim's own ELO, and the
 summary reports each metric's mean with a 95% confidence interval across seeds.
+
+To compare another parameter setting of a matchmaker, write its runs to an `output-<setting>` folder
+next to `output/`; the page shows it as `<matchmaker>-<setting>`. For example, the stochastic
+matchmaker with a lower skill weight:
+
+```bash
+python matchmakers/stochastic/simulate.py --w-skill 0.1 --output-dir matchmakers/stochastic/output-skill-0.1
+```
