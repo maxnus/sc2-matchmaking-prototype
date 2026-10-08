@@ -169,6 +169,31 @@ def _mean_concurrent(matches: pd.DataFrame) -> float:
     return float(busy / (end.max() - start.min()).total_seconds())
 
 
+def _rounds(matches: pd.DataFrame, data_enabled: dict) -> dict:
+    """How the real rounds overlapped, and how far into its round a match
+    started, by how many of its bots have bot data (0–1, averaged)."""
+    m = matches.dropna(subset=["match_started", "result_created"])
+    start = pd.to_datetime(m["match_started"], format="ISO8601")
+    end = pd.to_datetime(m["result_created"], format="ISO8601")
+    rounds = pd.DataFrame({"start": start.groupby(m["round"]).min(), "end": end.groupby(m["round"]).max()})
+    rounds = rounds.sort_values("start")
+    overlapping = (rounds["end"].shift() > rounds["start"]).iloc[1:]
+    # Rounds running at once: +1 at each round's start, −1 at its end, ends first on ties.
+    events = pd.DataFrame({
+        "time": pd.concat([rounds["start"], rounds["end"]]),
+        "change": [1] * len(rounds) + [-1] * len(rounds),
+    }).sort_values(["time", "change"])
+
+    position = start.groupby(m["round"]).rank(pct=True)
+    n_data = m["bot1_id"].map(data_enabled).astype(bool).astype(int) + m["bot2_id"].map(data_enabled).astype(bool).astype(int)
+    by_data = position.groupby(n_data).mean()
+    return {
+        "data.round_overlap_share": float(overlapping.mean()),
+        "data.max_active_rounds": int(events["change"].cumsum().max()),
+        **{f"data.round_position_data_{k}": float(v) for k, v in by_data.items()},
+    }
+
+
 def data_values(
     raw: pd.DataFrame, processed: pd.DataFrame, bots: pd.DataFrame, max_parallel: int,
 ) -> dict:
@@ -220,6 +245,7 @@ def data_values(
         "data.wall_game_ratio": float((wall / normal["duration_minutes"]).median()),
         "data.drift_ratio": _drift_ratio(processed),
         "data.mean_concurrent": _mean_concurrent(raw),
+        **_rounds(raw, data_enabled),
     }
 
 
@@ -328,7 +354,12 @@ def summary_table(sims: list[SimResult]) -> str:
     rows = []
     for key, label, fmt, better in HEADLINE_METRICS:
         stats = [s.summary["metrics"][key] for s in sims]
-        positions = _ranking([stat["mean"] for stat in stats], better)
+        means = [stat["mean"] for stat in stats]
+        positions = _ranking(means, better)
+        # A row that reads the same everywhere stays white, however the
+        # unrounded means differ.
+        if len({format(mean, fmt) for mean in means}) == 1:
+            positions = [None] * len(means)
         cells = "".join(
             f"<td style='background:{_ranking_colour(position)}'>{format_metric(stat, fmt)}</td>"
             for stat, position in zip(stats, positions)
