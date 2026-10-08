@@ -82,7 +82,7 @@ class SimResult:
 
 def _infer_name(d: Path) -> str:
     """`matchmakers/stochastic/output` → `stochastic`,
-    `matchmakers/stochastic/output-skill-0.1` → `stochastic-skill-0.1`;
+    `matchmakers/stochastic/output-single` → `stochastic-single`;
     otherwise the dir name."""
     if d.name == "output":
         return d.parent.name
@@ -303,6 +303,8 @@ def sim_values(sims: list[SimResult], n_bots: int) -> dict:
     values = {f"config.{k}": v for k, v in config.items()}
     values["config.measured_matches"] = config["total_matches"] - config["burn_in"]
     values["config.matches_per_bot"] = 2 * config["total_matches"] / n_bots
+    # Two bots per running match.
+    values["config.max_playing"] = 2 * config["max_concurrent"]
     for sim in sims:
         values.update({f"{sim.name}.config.{k}": v for k, v in sim.summary["config"].items()})
         values.update({f"{sim.name}.{k}": v["mean"] for k, v in sim.summary["metrics"].items()})

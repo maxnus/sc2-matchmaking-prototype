@@ -32,8 +32,8 @@ summary reports each metric's mean with a 95% confidence interval across seeds.
 
 To compare another parameter setting of a matchmaker, write its runs to an `output-<setting>` folder
 next to `output/`; the page shows it as `<matchmaker>-<setting>`. For example, the stochastic
-matchmaker with a lower skill weight:
+matchmaker playing every bot in at most one match at a time:
 
 ```bash
-python matchmakers/stochastic/simulate.py --w-skill 0.1 --output-dir matchmakers/stochastic/output-skill-0.1
+python matchmakers/stochastic/simulate.py --one-match-at-a-time --output-dir matchmakers/stochastic/output-single
 ```

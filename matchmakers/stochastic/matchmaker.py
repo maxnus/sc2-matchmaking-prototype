@@ -10,7 +10,7 @@ import pandas as pd
 
 @dataclass
 class ScoringParams:
-    w_skill: float = 0.15
+    w_skill: float = 0.1
     w_fair: float = 1.0
     w_var: float = 0.2
     tau: float = 15.0  # rank-difference tolerance (in rank positions)
@@ -61,12 +61,17 @@ class StochasticMatchmaker:
     most recently dispatched opponent was the other, is excluded from
     scoring.
 
+    With `one_match_at_a_time`, a bot that is playing is not paired again
+    until its match completes, even if it has no bot data and the sim would
+    let it play several at once.
+
     Every candidate pair is scored at once with numpy; a Python loop over
     pairs took most of a simulation's time on a ladder of 170 bots.
     """
 
-    def __init__(self, params: ScoringParams, seed=None):
+    def __init__(self, params: ScoringParams, one_match_at_a_time: bool = False, seed=None):
         self.params = params
+        self.one_match_at_a_time = one_match_at_a_time
         self.rng = np.random.default_rng(seed)
         self._ids: Optional[np.ndarray] = None  # bot ids, in the sim's order
         self._index: dict[int, int] = {}
@@ -188,6 +193,8 @@ class StochasticMatchmaker:
 
         # Candidate pairs, in the order itertools.combinations would give them.
         available = np.array([self._index[int(b)] for b in available_bots])
+        if self.one_match_at_a_time:
+            available = available[self._in_flight[available] == 0]
         i, j = np.triu_indices(len(available), 1)
         a, b = available[i], available[j]
         allowed = (self._in_flight_pairs[a, b] == 0) & (self._gso[a, b] != 0) & (self._gso[b, a] != 0)
