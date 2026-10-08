@@ -1,20 +1,17 @@
 """Round-robin matchmaker (AI Arena's current system).
 
 Bots are sorted by ELO into `n_divisions` equal bands. Every pair within a
-band plays once per round. After all of a round's matches have completed,
-divisions are re-assigned by current ELO and the next round begins.
-
-Strict round semantics: between rounds the matchmaker returns `None` while
-the last round's matches drain (so no round-N+1 dispatch overlaps with
-round-N completions). This matches the sequential for-loop of a classical
-round-robin, where ELO updates from round N are fully applied before
-division re-assignment.
+band plays once per round. Each round re-assigns the divisions by the ELO at
+its start. As on AI Arena, the next round starts as soon as no match of the
+current one can start, while its last matches still run (see
+`sim/rounds.py`).
 """
 
 from itertools import combinations
-from typing import Optional
 
 import pandas as pd
+
+from sim.rounds import RoundMatchmaker
 
 
 def _assign_divisions(
@@ -33,41 +30,18 @@ def _assign_divisions(
     return divisions
 
 
-class RoundRobinMatchmaker:
-    """Strict round-robin with periodic division re-assignment."""
+class RoundRobinMatchmaker(RoundMatchmaker):
+    """Round-robin within divisions, re-assigned every round."""
 
-    def __init__(self, n_divisions: int = 3):
+    def __init__(self, n_divisions: int = 3, max_active_rounds: int = 2, seed=None):
+        super().__init__(max_active_rounds, seed)
         self.n_divisions = n_divisions
-        # Remaining pairs to dispatch in the current round.
-        self._queue: list[tuple[int, int]] = []
-        self._round = 0
 
-    def __call__(
-        self,
-        bots: pd.DataFrame,
-        match_history: pd.DataFrame,
-        available_bots: list[int],
-    ) -> Optional[tuple[int, int]]:
-        if not self._queue:
-            # Round-done signal: nothing is in flight. Otherwise wait for
-            # the last round's matches to complete before re-dividing.
-            if bots["in_match"].any():
-                return None
-            self._start_next_round(bots)
-
-        available_set = set(available_bots)
-        for i, (a, b) in enumerate(self._queue):
-            if a in available_set and b in available_set:
-                del self._queue[i]
-                return a, b
-        return None
-
-    def _start_next_round(self, bots: pd.DataFrame) -> None:
-        self._round += 1
+    def _draw_round(self, bots: pd.DataFrame) -> list[tuple[int, int]]:
         ratings = dict(zip(bots["bot_id"], bots["elo"]))
         bot_ids = bots["bot_id"].tolist()
         divisions = _assign_divisions(bot_ids, ratings, self.n_divisions)
-        self._queue = [
+        return [
             (a, b)
             for div_bots in divisions
             for a, b in combinations(div_bots, 2)

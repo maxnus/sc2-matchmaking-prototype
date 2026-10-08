@@ -16,9 +16,9 @@ _own_dir = Path(__file__).resolve().parent
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 
 
-def make_matchmaker(n_divisions: int, seed: int) -> RoundRobinMatchmaker:
-    """Round-robin is deterministic; `seed` only fits the common factory signature."""
-    return RoundRobinMatchmaker(n_divisions=n_divisions)
+def make_matchmaker(n_divisions: int, max_active_rounds: int, seed: int) -> RoundRobinMatchmaker:
+    """`seed` shuffles the order in which each round's pairs start."""
+    return RoundRobinMatchmaker(n_divisions=n_divisions, max_active_rounds=max_active_rounds, seed=seed)
 
 
 def ladder_divisions(data_dir: Path) -> int:
@@ -39,11 +39,13 @@ def main():
     add_common_args(parser, _own_dir / "output")
     parser.add_argument("--n-divisions", type=int,
                         help="Number of divisions (default: as many as the real ladder in bots.csv)")
+    parser.add_argument("--max-active-rounds", type=int, default=2,
+                        help="Rounds that may run at once; the next starts when no match of the current ones can (default: 2, as on AI Arena)")
     args = parser.parse_args()
     if args.n_divisions is None:
         args.n_divisions = ladder_divisions(args.data_dir)
 
-    run_and_write(partial(make_matchmaker, args.n_divisions), args, extra_summary=add_total_rounds)
+    run_and_write(partial(make_matchmaker, args.n_divisions, args.max_active_rounds), args, extra_summary=add_total_rounds)
 
 
 if __name__ == "__main__":
