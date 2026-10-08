@@ -46,8 +46,6 @@ def main():
     parser.add_argument("--lam", type=float, default=40.0)
     parser.add_argument("--temperature", type=float, default=0.01,
                         help="Softmax sampling temperature (0 = argmax)")
-    parser.add_argument("--one-match-at-a-time", action="store_true",
-                        help="Pair no bot that is already playing, with or without bot data")
     args = parser.parse_args()
 
     params = ScoringParams(
@@ -56,8 +54,7 @@ def main():
     )
     log.info("Scoring params: %s", params)
 
-    make_matchmaker = partial(StochasticMatchmaker, params, one_match_at_a_time=args.one_match_at_a_time)
-    run_and_write(make_matchmaker, args, extra_summary=_add_score_components)
+    run_and_write(partial(StochasticMatchmaker, params), args, extra_summary=_add_score_components)
 
 
 if __name__ == "__main__":

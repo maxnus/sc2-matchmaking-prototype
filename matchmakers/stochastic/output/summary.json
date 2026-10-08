@@ -14,8 +14,7 @@
     "w_var": 0.2,
     "tau": 15.0,
     "lam": 40.0,
-    "temperature": 0.01,
-    "one_match_at_a_time": false
+    "temperature": 0.01
   },
   "runs": [
     "seed_0",

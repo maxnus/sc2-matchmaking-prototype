@@ -32,8 +32,8 @@ summary reports each metric's mean with a 95% confidence interval across seeds.
 
 To compare another parameter setting of a matchmaker, write its runs to an `output-<setting>` folder
 next to `output/`; the page shows it as `<matchmaker>-<setting>`. For example, the stochastic
-matchmaker playing every bot in at most one match at a time:
+matchmaker with a higher softmax temperature:
 
 ```bash
-python matchmakers/stochastic/simulate.py --one-match-at-a-time --output-dir matchmakers/stochastic/output-single
+python matchmakers/stochastic/simulate.py --temperature 0.02 --output-dir matchmakers/stochastic/output-temp-0.02
 ```
