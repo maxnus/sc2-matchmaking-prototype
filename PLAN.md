@@ -103,7 +103,7 @@ The existing tests are the regression suite and must pass unchanged: `test_round
 
 ## Phase 2: schema
 
-*Done, with phases 3 and 4,* on the branch `ccr-2b67f687-pe4xp3-stochastic`, stacked on phase 1.
+*Done, with phases 3 and 4,* in [maxnus/aiarena-web#2](https://github.com/maxnus/aiarena-web/pull/2), stacked on phase 1.
 As built, the parameters have descriptive names (below), and they sit next to the division
 settings rather than in a fieldset: the competition admin lists every field in model order, and a
 fieldset would hide any field later added outside it. Left blank, a parameter takes its default.
