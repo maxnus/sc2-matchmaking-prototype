@@ -62,7 +62,10 @@ class StochasticMatchmaker:
 
     Rematch prevention: any pair that is in flight, or where either bot's
     most recently dispatched opponent was the other, is excluded from
-    scoring.
+    scoring. The second rule applies only from three bots up: two bots have
+    no one else to play, and would never meet again. With three or more,
+    the latest opponents block fewer pairs than there are, so some pair is
+    always allowed once every bot is free.
 
     Every candidate pair is scored at once with numpy; a Python loop over
     pairs took most of a simulation's time on a ladder of 170 bots.
@@ -185,7 +188,9 @@ class StochasticMatchmaker:
         available = np.array([self._index[int(b)] for b in available_bots])
         i, j = np.triu_indices(len(available), 1)
         a, b = available[i], available[j]
-        allowed = (self._in_flight_pairs[a, b] == 0) & (self._gso[a, b] != 0) & (self._gso[b, a] != 0)
+        allowed = self._in_flight_pairs[a, b] == 0
+        if len(self._ids) >= 3:
+            allowed &= (self._gso[a, b] != 0) & (self._gso[b, a] != 0)
         a, b = a[allowed], b[allowed]
         if len(a) == 0:
             return None

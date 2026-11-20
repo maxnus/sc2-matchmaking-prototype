@@ -30,7 +30,8 @@ python analysis/analysis.py                # writes analysis/report.html from an
 
 Each `simulate.py` runs `--seeds` independent simulations (default 8, in parallel) of
 `--total-matches` matches (default 50,000), with ratings starting from the bots' AI Arena
-ELOs (`--initial-elo flat` starts every bot at 1600 instead). The first `--burn-in` matches
+ELOs (`--initial-elo flat` starts every bot at 1600 instead). `--n-bots N` plays a random subset
+of N bots, a different one in each run, as on a small or newly opened ladder. The first `--burn-in` matches
 (default 10,000) are left out of the metrics. Runs are scored against the outcome model's true
 expected scores and ratings (`sim/metrics.py`), not only against the sim's own ELO, and the
 summary reports each metric's mean with a 95% confidence interval across seeds.

@@ -46,6 +46,9 @@ def add_common_args(parser: argparse.ArgumentParser, default_output_dir: Path) -
     parser.add_argument("--initial-elo", choices=["real", "flat"], default="real",
                         help="Start from the AI Arena ELOs in bots.csv (real) "
                              "or with every bot at 1600 (flat)")
+    parser.add_argument("--n-bots", type=int,
+                        help="Play only this many of the bots, a different random subset in "
+                             "each run, as on a small or newly opened ladder (default: all)")
     parser.add_argument("--max-concurrent", type=int, default=12, help="Server slots")
     parser.add_argument("--max-parallel", type=int, default=4,
                         help="Most matches a bot without bot data plays at once")
@@ -115,6 +118,10 @@ def _run_seed(
     """Run and write the `i`-th sim; returns its summary."""
     sim_seed, mm_seed = args.sim_seed + i, args.mm_seed + i
     bots, gp, lookup = load_model(args.data_dir, args.model_dir)
+    if args.n_bots is not None:
+        if not 2 <= args.n_bots <= len(bots):
+            raise SystemExit(f"--n-bots must be between 2 and {len(bots)}")
+        bots = bots.sample(n=args.n_bots, random_state=sim_seed).reset_index(drop=True)
     initial = dict(zip(bots["bot_id"], bots["elo"])) if args.initial_elo == "real" else None
     matchmaker = make_matchmaker(seed=mm_seed)
 
