@@ -253,7 +253,7 @@ Tests use the arena client helper in `aiarena/api/arenaclient/testing_utils.py`;
 
 ## Phase 5: display and documentation
 
-*Done* in a third PR, stacked on phases 2–4. As built: a stochastic
+*Done* in [maxnus/aiarena-web#3](https://github.com/maxnus/aiarena-web/pull/3), stacked on phases 2–4. As built: a stochastic
 round is named after its day, "Day 2026-12-03", by the model's round name, which GraphQL exposes
 and the SPA's round page, rounds list, match page and ELO chart use. The competition page shows
 the matchmaker. The competition and round pages are SPA pages; their Django views and templates,
