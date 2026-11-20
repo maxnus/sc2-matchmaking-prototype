@@ -1,0 +1,123 @@
+{
+  "total_matches": 100,
+  "burn_in": 0,
+  "window_matches": 100,
+  "window_days": 0.47,
+  "metrics": {
+    "favourite_expected_score": {
+      "mean": 0.8382,
+      "median": 0.8382
+    },
+    "lopsided_rate": 0.0,
+    "elo_diff": {
+      "mean": 197.7,
+      "std": 66.5,
+      "median": 215.2
+    },
+    "rating_accuracy": {
+      "spearman": NaN,
+      "rmse": 46.6,
+      "spread_ratio_end": 0.9057
+    },
+    "matches_per_bot": {
+      "mean": 100.0,
+      "std": 0.0,
+      "min": 100,
+      "max": 100
+    },
+    "unique_opponents_per_bot": {
+      "mean": 1.0,
+      "std": 0.0,
+      "min": 1,
+      "max": 1
+    },
+    "max_repeat_opponent": {
+      "mean": 100.0,
+      "std": 0.0,
+      "min": 100,
+      "max": 100
+    },
+    "matches_per_day": 214.8,
+    "server_utilisation": 0.166,
+    "duration_minutes": {
+      "mean": 13.36,
+      "std": 9.66
+    },
+    "category_rates": {
+      "normal": 0.95,
+      "timelimit": 0.03,
+      "abnormal": 0.02
+    },
+    "total_rounds": 102
+  },
+  "rating_accuracy_trajectory": [
+    {
+      "match_count": 0,
+      "spearman": NaN,
+      "rmse": 142.9,
+      "spread_ratio": 0.0
+    },
+    {
+      "match_count": 10,
+      "spearman": 1.0,
+      "rmse": 93.3,
+      "spread_ratio": 0.3472
+    },
+    {
+      "match_count": 20,
+      "spearman": 1.0,
+      "rmse": 73.3,
+      "spread_ratio": 0.4867
+    },
+    {
+      "match_count": 30,
+      "spearman": 1.0,
+      "rmse": 45.1,
+      "spread_ratio": 0.6843
+    },
+    {
+      "match_count": 40,
+      "spearman": 1.0,
+      "rmse": 37.4,
+      "spread_ratio": 0.7379
+    },
+    {
+      "match_count": 50,
+      "spearman": 1.0,
+      "rmse": 25.0,
+      "spread_ratio": 0.825
+    },
+    {
+      "match_count": 60,
+      "spearman": 1.0,
+      "rmse": 10.8,
+      "spread_ratio": 0.9242
+    },
+    {
+      "match_count": 70,
+      "spearman": 1.0,
+      "rmse": 29.1,
+      "spread_ratio": 0.7965
+    },
+    {
+      "match_count": 80,
+      "spearman": 1.0,
+      "rmse": 13.9,
+      "spread_ratio": 0.9028
+    },
+    {
+      "match_count": 90,
+      "spearman": 1.0,
+      "rmse": 28.0,
+      "spread_ratio": 0.8043
+    },
+    {
+      "match_count": 100,
+      "spearman": 1.0,
+      "rmse": 13.5,
+      "spread_ratio": 0.9057
+    }
+  ],
+  "sim_seed": 45,
+  "mm_seed": 103
+}

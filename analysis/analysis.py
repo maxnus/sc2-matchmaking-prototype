@@ -18,6 +18,8 @@ matchmaker can have further parameter settings in `output-<setting>` dirs
 next to `output/`, named `<matchmaker>-<setting>` on the page. The figures
 and the summary table show each matchmaker's main setting only; the
 stochastic matchmaker's settings are compared in a table of their own.
+Runs on small ladders, random subsets of N bots, live in
+`matchmakers/<matchmaker>/small/n<N>/` and get a table of their own too.
 Writes `report.html`, with a contents sidebar built from the `##` and `###`
 headings.
 """
@@ -356,8 +358,10 @@ SETTINGS_METRICS = HEADLINE_METRICS + [
 
 def summary_table(
     sims: list[SimResult], metrics: list[tuple] = HEADLINE_METRICS, labels: list[str] | None = None,
+    compact: bool = False,
 ) -> str:
-    """One column per simulation, headed by its name or the given label."""
+    """One column per simulation, headed by its name or the given label;
+    `compact` uses a smaller font, so that more columns fit."""
     header = "".join(
         f"<th style='color:{s.color}'>{html.escape(label)}<br>"
         f"<span class='muted'>{len(s.runs)} runs</span></th>"
@@ -381,9 +385,92 @@ def summary_table(
             f"{cells}</tr>"
         )
     return (
-        "<table class='summary'>\n"
+        f"<table class='summary{' compact' if compact else ''}'>\n"
         f"<thead><tr><th>Metric (mean ± 95% CI across runs)</th>{header}</tr></thead>\n"
         f"<tbody>{''.join(rows)}</tbody>\n</table>\n"
+    )
+
+
+# --- Small ladders ---
+
+
+@dataclass
+class SmallLadder:
+    """One matchmaker's runs on random subsets of `n_bots` bots."""
+    matchmaker: str
+    n_bots: int
+    summary: dict
+    matches_with_data: float  # mean matches per bot with bot data, over runs
+    matches_without_data: float
+
+
+def load_small_ladders(bot_data: dict[int, bool]) -> list[SmallLadder]:
+    """Runs in `matchmakers/<matchmaker>/small/n<N>/`, or `n<N>-<setting>/` for a
+    further setting (named `<matchmaker>-<setting>`), ordered by N, then name."""
+    ladders = []
+    for d in (REPO_ROOT / "matchmakers").glob("*/small/n*"):
+        if not (d / "summary.json").exists():
+            continue
+        setting = re.fullmatch(r"n\d+(?:-(.+))?", d.name).group(1)
+        name = d.parent.parent.name + (f"-{setting}" if setting else "")
+        with open(d / "summary.json") as f:
+            summary = json.load(f)
+        with_data, without_data = [], []
+        for run_name in summary["runs"]:
+            m = pd.read_csv(d / run_name / "matches.csv.gz")
+            counts = pd.concat([m["bot_a"], m["bot_b"]]).value_counts()
+            has_data = np.array([bot_data[b] for b in counts.index])
+            with_data.append(counts[has_data].mean())
+            without_data.append(counts[~has_data].mean())
+        ladders.append(SmallLadder(
+            matchmaker=name, n_bots=summary["config"]["n_bots"], summary=summary,
+            matches_with_data=float(np.nanmean(with_data)),
+            matches_without_data=float(np.nanmean(without_data)),
+        ))
+    return sorted(ladders, key=lambda s: (s.n_bots, s.matchmaker))
+
+
+def small_ladder_values(ladders: list[SmallLadder]) -> dict:
+    """`small.n8.stochastic.matches_per_bot.std` and so on, for the text."""
+    values = {}
+    for s in ladders:
+        prefix = f"small.n{s.n_bots}.{s.matchmaker}"
+        values.update({f"{prefix}.{k}": v["mean"] for k, v in s.summary["metrics"].items()})
+        values[f"{prefix}.matches_with_data"] = s.matches_with_data
+        values[f"{prefix}.matches_without_data"] = s.matches_without_data
+    if ladders:
+        config = ladders[0].summary["config"]
+        values["small.config.games_per_bot"] = 2 * config["total_matches"] / config["n_bots"]
+        values["small.config.seeds"] = config["seeds"]
+        values["small.config.sizes"] = ", ".join(str(n) for n in sorted({s.n_bots for s in ladders}))
+    return values
+
+
+def small_ladder_table(ladders: list[SmallLadder]) -> str:
+    def metric(s: SmallLadder, key: str) -> float:
+        return s.summary["metrics"][key]["mean"]
+
+    # Headers are broken over two lines, so that every column fits.
+    columns = [
+        ("Matches per bot:<br>standard deviation", lambda s: f"{metric(s, 'matches_per_bot.std'):.1f}"),
+        ("Matches per bot, with /<br>without bot data",
+         lambda s: f"{s.matches_with_data:.0f} / {s.matches_without_data:.0f}"
+         if not np.isnan(s.matches_with_data) and not np.isnan(s.matches_without_data) else "–"),
+        ("Distinct<br>opponents", lambda s: f"{metric(s, 'unique_opponents_per_bot.mean'):.1f}"
+                                            f" <span class='muted'>of {s.n_bots - 1}</span>"),
+        ("Server time<br>in use", lambda s: f"{metric(s, 'server_utilisation'):.0%}"),
+        ("Matches per<br>simulated day", lambda s: f"{metric(s, 'matches_per_day'):,.0f}"),
+    ]
+    header = "".join(f"<th>{label}</th>" for label, _ in columns)
+    rows = "".join(
+        f"<tr><th>{s.n_bots} bots: {html.escape(s.matchmaker)}</th>"
+        + "".join(f"<td>{cell(s)}</td>" for _, cell in columns) + "</tr>"
+        for s in ladders
+    )
+    return (
+        "<table class='summary'>\n"
+        f"<thead><tr><th>Ladder: matchmaker<br><span class='muted'>means across runs</span></th>{header}</tr></thead>\n"
+        f"<tbody>{rows}</tbody>\n</table>\n"
     )
 
 
@@ -797,6 +884,7 @@ table.summary td { text-align: right; font-variant-numeric: tabular-nums; white-
 table.summary thead th { text-align: right; white-space: nowrap; }
 table.summary th:first-child { text-align: left; font-weight: normal; min-width: 200px; }
 table.summary th, table.summary td { padding: 6px 9px; }
+table.summary.compact th, table.summary.compact td { padding: 5px 5px; font-size: 0.9em; }
 .muted { color: var(--muted); font-size: 0.85em; font-weight: normal; }
 @media (max-width: 999px) {
   .layout { display: block; }
@@ -948,12 +1036,14 @@ def main():
     raw = pd.read_csv(args.data_dir / "matches.csv")
     processed = preprocess_matches(raw)
     burn_in = sims[0].summary["config"]["burn_in"]
+    small_ladders = load_small_ladders(dict(zip(all_bots["bot_id"], all_bots["bot_data_enabled"])))
 
     values = {
         **data_values(raw, processed, all_bots, sims[0].summary["config"]["max_parallel"]),
         **model_values(gp, matchups, all_bots),
         **truth_values(truth, bots),
         **sim_values(sims, len(bot_ids)),
+        **small_ladder_values(small_ladders),
     }
 
     log.info("Generating report...")
@@ -966,7 +1056,9 @@ def main():
             # Short headers, so that every setting fits: `stochastic-temp-0.01` → `temp-0.01`.
             labels=["main" if s.name == "stochastic" else s.name.removeprefix("stochastic-")
                     for s in stochastic_settings],
+            compact=True,
         ),
+        "small-ladders": small_ladder_table(small_ladders),
         "favourite-score": _figure_html(plot_favourite_score(main_sims, truth)),
         "elo-diff": _figure_html(plot_elo_diff(main_sims)),
         "rating-accuracy": _figure_html(plot_rating_accuracy(main_sims, burn_in)),

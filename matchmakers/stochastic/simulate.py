@@ -48,12 +48,15 @@ def main():
                         help="Softmax sampling temperature (0 = argmax)")
     parser.add_argument("--window-games", type=float, default=10.0,
                         help="Fairness window: the last W·n/2 dispatched matches, W games per bot on average")
+    parser.add_argument("--allow-parallel", action="store_true",
+                        help="Let bots without bot data play several matches at once, up to --max-parallel "
+                             "(default: every bot plays one match at a time)")
     args = parser.parse_args()
 
     params = ScoringParams(
         w_skill=args.w_skill, w_fair=args.w_fair, w_var=args.w_var,
         tau=args.tau, lam=args.lam, temperature=args.temperature,
-        window_games=args.window_games,
+        window_games=args.window_games, allow_parallel=args.allow_parallel,
     )
     log.info("Scoring params: %s", params)
 

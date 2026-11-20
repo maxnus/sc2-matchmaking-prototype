@@ -19,6 +19,9 @@ class ScoringParams:
     # Fairness window: the last window_games · n / 2 dispatched matches, so
     # window_games games per bot on average.
     window_games: float = 10.0
+    # Whether a bot without bot data may play several matches at once, as the
+    # ladder allows; by default every bot plays one match at a time.
+    allow_parallel: bool = False
 
 
 # The score's components. Each takes the values of many pairs at once as
@@ -66,6 +69,13 @@ class StochasticMatchmaker:
     no one else to play, and would never meet again. With three or more,
     the latest opponents block fewer pairs than there are, so some pair is
     always allowed once every bot is free.
+
+    One match at a time: unless `allow_parallel` is set, only bots that are
+    not playing are candidates, even bots without bot data that the ladder
+    would let play several matches. On a full ladder few bots are busy, so
+    this costs nothing; on a small one with spare servers, those bots would
+    otherwise take every spare server and play several times as often as
+    bots with bot data.
 
     Every candidate pair is scored at once with numpy; a Python loop over
     pairs took most of a simulation's time on a ladder of 170 bots.
@@ -185,7 +195,9 @@ class StochasticMatchmaker:
         ranks[order] = np.arange(len(order))
 
         # Candidate pairs, in the order itertools.combinations would give them.
-        available = np.array([self._index[int(b)] for b in available_bots])
+        available = np.array([self._index[int(b)] for b in available_bots], dtype=int)
+        if not self.params.allow_parallel:
+            available = available[self._in_flight[available] == 0]
         i, j = np.triu_indices(len(available), 1)
         a, b = available[i], available[j]
         allowed = self._in_flight_pairs[a, b] == 0

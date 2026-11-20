@@ -1,0 +1,183 @@
+{
+  "total_matches": 200,
+  "burn_in": 0,
+  "window_matches": 200,
+  "window_days": 0.89,
+  "metrics": {
+    "favourite_expected_score": {
+      "mean": 0.8285,
+      "median": 0.8642
+    },
+    "lopsided_rate": 0.335,
+    "elo_diff": {
+      "mean": 162.2,
+      "std": 119.6,
+      "median": 130.9
+    },
+    "rating_accuracy": {
+      "spearman": NaN,
+      "rmse": 89.2,
+      "spread_ratio_end": 0.9046
+    },
+    "matches_per_bot": {
+      "mean": 100.0,
+      "std": 0.8,
+      "min": 99,
+      "max": 101
+    },
+    "unique_opponents_per_bot": {
+      "mean": 3.0,
+      "std": 0.0,
+      "min": 3,
+      "max": 3
+    },
+    "max_repeat_opponent": {
+      "mean": 33.8,
+      "std": 0.5,
+      "min": 33,
+      "max": 34
+    },
+    "matches_per_day": 225.6,
+    "server_utilisation": 0.1635,
+    "duration_minutes": {
+      "mean": 12.52,
+      "std": 10.48
+    },
+    "category_rates": {
+      "normal": 0.96,
+      "timelimit": 0.03,
+      "abnormal": 0.01
+    },
+    "total_rounds": 35
+  },
+  "rating_accuracy_trajectory": [
+    {
+      "match_count": 0,
+      "spearman": NaN,
+      "rmse": 197.9,
+      "spread_ratio": 0.0
+    },
+    {
+      "match_count": 10,
+      "spearman": 1.0,
+      "rmse": 169.5,
+      "spread_ratio": 0.1529
+    },
+    {
+      "match_count": 20,
+      "spearman": 1.0,
+      "rmse": 157.0,
+      "spread_ratio": 0.216
+    },
+    {
+      "match_count": 30,
+      "spearman": 1.0,
+      "rmse": 156.0,
+      "spread_ratio": 0.2182
+    },
+    {
+      "match_count": 40,
+      "spearman": 1.0,
+      "rmse": 143.3,
+      "spread_ratio": 0.3027
+    },
+    {
+      "match_count": 50,
+      "spearman": 1.0,
+      "rmse": 131.0,
+      "spread_ratio": 0.3542
+    },
+    {
+      "match_count": 60,
+      "spearman": 1.0,
+      "rmse": 111.9,
+      "spread_ratio": 0.4445
+    },
+    {
+      "match_count": 70,
+      "spearman": 0.8,
+      "rmse": 111.8,
+      "spread_ratio": 0.4496
+    },
+    {
+      "match_count": 80,
+      "spearman": 1.0,
+      "rmse": 94.3,
+      "spread_ratio": 0.5328
+    },
+    {
+      "match_count": 90,
+      "spearman": 0.8,
+      "rmse": 88.0,
+      "spread_ratio": 0.5741
+    },
+    {
+      "match_count": 100,
+      "spearman": 0.8,
+      "rmse": 86.0,
+      "spread_ratio": 0.5943
+    },
+    {
+      "match_count": 110,
+      "spearman": 0.8,
+      "rmse": 70.8,
+      "spread_ratio": 0.6593
+    },
+    {
+      "match_count": 120,
+      "spearman": 1.0,
+      "rmse": 57.4,
+      "spread_ratio": 0.7154
+    },
+    {
+      "match_count": 130,
+      "spearman": 1.0,
+      "rmse": 52.7,
+      "spread_ratio": 0.7405
+    },
+    {
+      "match_count": 140,
+      "spearman": 1.0,
+      "rmse": 44.8,
+      "spread_ratio": 0.7751
+    },
+    {
+      "match_count": 150,
+      "spearman": 1.0,
+      "rmse": 37.5,
+      "spread_ratio": 0.8177
+    },
+    {
+      "match_count": 160,
+      "spearman": 1.0,
+      "rmse": 34.6,
+      "spread_ratio": 0.8505
+    },
+    {
+      "match_count": 170,
+      "spearman": 1.0,
+      "rmse": 31.2,
+      "spread_ratio": 0.8804
+    },
+    {
+      "match_count": 180,
+      "spearman": 1.0,
+      "rmse": 36.7,
+      "spread_ratio": 0.8881
+    },
+    {
+      "match_count": 190,
+      "spearman": 1.0,
+      "rmse": 32.1,
+      "spread_ratio": 0.9094
+    },
+    {
+      "match_count": 200,
+      "spearman": 1.0,
+      "rmse": 28.4,
+      "spread_ratio": 0.9046
+    }
+  ],
+  "sim_seed": 48,
+  "mm_seed": 106
+}
