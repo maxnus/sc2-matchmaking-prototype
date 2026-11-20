@@ -28,13 +28,8 @@ aiarena-web.
 | 8 | **Temperature T = 0.02.** | Against 0.01 it gives up a little closeness (favourite's expected score 0.728 → 0.741) for less stretched ratings (error 57 → 48 ELO), more varied opponents and more even match counts. At 0.05 matches get markedly less close (0.757, one in five lopsided) and the ratings order the bots less well, for only a little more variety and evenness. |
 | 9 | **Stochastic from a competition's first bots on.** The rematch block applies only from three active bots up. | A competition opens with only a few bots. With two, the rule "neither bot's latest opponent may be the other" would stop them from ever playing again. From three up it can't stall: the latest opponents block at most n − 1 of the n(n − 1)/2 pairs, so once every bot is free some pair is allowed. |
 | 10 | **Every bot plays one match at a time** in stochastic competitions, bots without bot data included. Replaces the parallel-match cap setting proposed earlier. | On a small ladder with spare servers, bots without bot data would otherwise take every spare server: on 8 bots, 163 matches each against 55 for bots with bot data, and on 16 bots each bot meets only 13 of its 15 possible opponents. One at a time keeps counts even, as round-robin does, at the cost of leaving servers idle, as round-robin does. On the full ladder it changes nothing but making match counts slightly more even (standard deviation 8.8 → 7.5): only about 22 of 173 bots are busy at any moment. The smallest ladders play more slowly: 4 bots can run only 2 matches at once (161 matches a day against round-robin's 249); from 8 bots up they're level. |
-
-### Proposed here, not yet discussed
-
-- **After switching a competition to stochastic, its leftover round-robin matches are played out**
-  rather than deleted. The stochastic matchmaker fills the remaining slots meanwhile.
-- **A round records which matchmaker created it**, so the UI can label periods and the rollout can
-  tell the two eras apart.
+| 11 | **After switching to stochastic, leftover round-robin matches are played out**, not deleted. The stochastic matchmaker fills every slot they can't use. | It needs no new code, since unstarted matches in open rounds are already started first, and it loses no scheduled match. Switching back halfway simply continues the same rounds. The cost is up to about a day of mostly round-robin matches, which decision 12 keeps apart from stochastic ones. Deleting them would need a switch action that deletes under the lock and then completes the emptied rounds; an admin action for that can be added if an immediate clean start is ever wanted. |
+| 12 | **A round records which matchmaker created it.** | So the UI can label periods as days, also in the history of a competition that was switched back, and the rollout can select exactly the matches stochastic picked, including during the transition. Neither the period flag (true only while a period is open) nor the competition's current matchmaker can tell this afterwards. Scheduling doesn't use it. |
 
 ## Concepts
 
@@ -46,6 +41,10 @@ aiarena-web.
   closing, and when a switch back to round-robin opens a round.
 - **Complete**: sealed, and every match has a result. A round is never completed while unsealed;
   otherwise a period would complete whenever its running matches happened to run out.
+- **A period never holds an unstarted match.** Stochastic creates and starts each match in one
+  savepoint, and rolls it back if the start fails. So "start unstarted matches in open rounds" only
+  ever finds round-robin leftovers (decision 11). This belongs in the matchmaking package's
+  CLAUDE.md once periods exist.
 - **Availability is global; fairness and variety are per competition.** A bot playing in another
   competition, or in a requested match, is busy. But only this competition's matches count towards
   its fairness and variety here.
