@@ -242,13 +242,15 @@ where ranks follow the current ratings (best = 0) and $\tau$ is measured in rank
 
 #### Fairness
 
-Bots that have played fewer games are prioritised. Let $g_i$ be the number of games bot $i$ completed in the last 24 hours plus those it is playing right now, and $\bar{g}$ the mean over all bots. Each bot's normalised deficit is $d_i = \max(\bar{g} - g_i, 0) / \bar{g}$, and
+Bots that have played fewer games are prioritised. Let $g_i$ be the number of games bot $i$ has among the ladder's last $W n / 2$ matches, finished or still running, where $n$ is the number of bots; the window holds $W$ games per bot on average. Let $\bar{g}$ be the mean over all bots. Each bot's normalised deficit is $d_i = \max(\bar{g} - g_i, 0) / \bar{g}$, and
 
 $$
 f_\text{fair}(A, B) = \sqrt{\frac{d_A^2 + d_B^2}{2}}.
 $$
 
 Clipping at zero means a bot above the average neither adds to nor subtracts from a pairing's fairness score. The root mean square rewards pairing two underplayed bots more than pairing one, and dividing by $\bar{g}$ keeps the term on a scale comparable to the others. Bots that have just joined the ladder get a temporary boost, since their count in the window is low. Values lie in $[0, 1]$.
+
+The window is counted in matches rather than hours because $W$ sets how much a missing game weighs: since $\bar{g} \approx W$, a bot $k$ games behind scores about $k / (W\sqrt{2})$ when paired with a bot that isn't behind. A window of a fixed time would hold as many games as the ladder happens to play in that time, which changes with the number of servers, with outages and with how long games take, and the weight of a missing game would change with it.
 
 #### Opponent variety
 
@@ -280,6 +282,7 @@ where $T$ is the temperature: $T \to 0$ recovers the pure maximum, larger $T$ ad
 | $\tau$ | <!-- value: stochastic.config.tau --> | Rank-difference tolerance, in rank positions |
 | $\lambda$ | <!-- value: stochastic.config.lam --> | How quickly a past match-up is forgotten, in games |
 | $T$ | <!-- value: stochastic.config.temperature --> | Softmax temperature |
+| $W$ | <!-- value: stochastic.config.window_games --> | Fairness window, in games per bot |
 
 The components have different scales, so the weights also normalise them and can't be compared with each other directly. The skill weight sets how much closeness counts against fairness and variety anywhere on the ladder, while $\tau$ sets which rank differences count as close; lowering the weight is the more direct way to trade closeness for the other goals. The matchmaker was designed with a skill weight of 0.15. Lowering it to <!-- value: stochastic.config.w_skill --> gave up some closeness for ratings that settle instead of stretching, more variety and more even match counts, so that is the setting shown here.
 

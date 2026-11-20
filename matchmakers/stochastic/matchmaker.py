@@ -16,6 +16,9 @@ class ScoringParams:
     tau: float = 15.0  # rank-difference tolerance (in rank positions)
     lam: float = 40.0
     temperature: float = 0.01  # softmax sampling temperature (0 = argmax)
+    # Fairness window: the last window_games · n / 2 dispatched matches, so
+    # window_games games per bot on average.
+    window_games: float = 14.0
 
 
 # The score's components. Each takes the values of many pairs at once as
@@ -43,8 +46,8 @@ class StochasticMatchmaker:
 
     Maintains internal bookkeeping, indexed by each bot's position in the
     sim's `bots` table:
-      - `_games_24h[i]`: completion times of bot i's matches in the last 24h
-        of simulated time (the clock is the latest completion seen)
+      - `_window`: the last `window_games · n / 2` dispatched pairs, finished
+        or not, and `_window_counts[i]`: bot i's matches among them
       - `_in_flight[i]`: matches dispatched but not yet completed
       - `_in_flight_pairs[i, j]`: the same, per pair (symmetric)
       - `_gso[i, j]`: games dispatched for bot i since it was last dispatched
@@ -52,8 +55,8 @@ class StochasticMatchmaker:
       - `_total_games[i]`: cumulative dispatched matches per bot
 
     The sim fills every free slot in one go, before any of those matches
-    completes. Pair history and in-flight counts are therefore updated when a
-    pair is returned, not when it completes; otherwise the same pair, or the
+    completes. Pair history, the fairness window and in-flight counts are
+    therefore updated when a pair is returned, not when it completes; otherwise the same pair, or the
     same underplayed bot, would be picked for several slots at once. This
     relies on the sim dispatching every pair the matchmaker returns.
 
@@ -71,7 +74,6 @@ class StochasticMatchmaker:
         self._ids: Optional[np.ndarray] = None  # bot ids, in the sim's order
         self._index: dict[int, int] = {}
         self._seen_mids: set[int] = set()
-        self._now = 0.0
         # Per-dispatch diagnostics. Index aligns with the sim's `match_id`
         # (matchmaker is called once per dispatch; we append on success).
         self.choice_log: list[dict[str, float]] = []
@@ -86,7 +88,9 @@ class StochasticMatchmaker:
         n = len(ids)
         self._ids = ids
         self._index = {int(b): i for i, b in enumerate(ids)}
-        self._games_24h: list[deque[float]] = [deque() for _ in range(n)]
+        self._window: deque[tuple[int, int]] = deque()
+        self._window_size = max(1, round(self.params.window_games * n / 2))
+        self._window_counts = np.zeros(n, dtype=int)
         self._in_flight = np.zeros(n, dtype=int)
         self._in_flight_pairs = np.zeros((n, n), dtype=int)
         self._gso = np.full((n, n), -1, dtype=int)
@@ -107,40 +111,32 @@ class StochasticMatchmaker:
         if new_start == len(match_ids):
             return
         new = match_history.iloc[new_start:]
-        for mid, bot_a, bot_b, end_time in zip(
-            new["match_id"].to_numpy(), new["bot_a"].to_numpy(),
-            new["bot_b"].to_numpy(), new["time_end"].to_numpy(),
+        for mid, bot_a, bot_b in zip(
+            new["match_id"].to_numpy(), new["bot_a"].to_numpy(), new["bot_b"].to_numpy(),
         ):
             a = self._index[int(bot_a)]
             b = self._index[int(bot_b)]
-            end_time = float(end_time)
             self._seen_mids.add(int(mid))
-
-            self._games_24h[a].append(end_time)
-            self._games_24h[b].append(end_time)
-            self._now = max(self._now, end_time)
 
             self._in_flight[[a, b]] -= 1
             self._in_flight_pairs[a, b] -= 1
             self._in_flight_pairs[b, a] -= 1
 
-    def _expire_old_games(self) -> None:
-        """Drop completions older than 24h from every bot's window.
-
-        Pruning against the global clock (not just when a bot plays again)
-        keeps the count of a bot that hasn't played lately from going stale.
-        """
-        cutoff = self._now - 24 * 60
-        for times in self._games_24h:
-            while times and times[0] <= cutoff:
-                times.popleft()
-
     def _games_in_window(self) -> np.ndarray:
-        """Matches counted for fairness, per bot: completed in the last 24h, plus in flight."""
-        completed = np.fromiter((len(t) for t in self._games_24h), dtype=int, count=len(self._games_24h))
-        return completed + self._in_flight
+        """Matches counted for fairness, per bot: its matches among the last
+        `_window_size` dispatched, whether finished or still running.
+
+        The window is counted in matches rather than time so that the number
+        of games it holds, which sets how much fairness weighs against skill,
+        doesn't depend on how many servers run or how long games take.
+        """
+        return self._window_counts
 
     def _record_dispatch(self, a: int, b: int) -> None:
+        self._window.append((a, b))
+        self._window_counts[[a, b]] += 1
+        if len(self._window) > self._window_size:
+            self._window_counts[list(self._window.popleft())] -= 1
         self._in_flight[[a, b]] += 1
         self._in_flight_pairs[a, b] += 1
         self._in_flight_pairs[b, a] += 1
@@ -179,7 +175,6 @@ class StochasticMatchmaker:
     ) -> Optional[tuple[int, int]]:
         self._ensure_bots(bots)
         self._ingest_new_matches(match_history)
-        self._expire_old_games()
 
         # Rank by rating, best first; ties by bot id.
         order = np.lexsort((self._ids, -bots["elo"].to_numpy()))
