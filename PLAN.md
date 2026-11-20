@@ -273,7 +273,7 @@ a competition switches.
 ## Phase 6: rollout
 
 1. **Deploy phases 1–5** with every competition on `round_robin`, and confirm nothing changes.
-2. **Deploy the make-not-null follow-up.**
+2. **Deploy the make-not-null follow-up,** [maxnus/aiarena-web#4](https://github.com/maxnus/aiarena-web/pull/4), in a later deploy than #2.
 3. **Switch a competition** to `stochastic` in the admin.
 4. **Expect ratings to adjust over about a week.** The sim's burn-in was 10,000 matches, about
    7 days at the current ~1,450 a day.
