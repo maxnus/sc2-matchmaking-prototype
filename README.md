@@ -37,9 +37,9 @@ expected scores and ratings (`sim/metrics.py`), not only against the sim's own E
 summary reports each metric's mean with a 95% confidence interval across seeds.
 
 To compare another parameter setting of a matchmaker, write its runs to an `output-<setting>` folder
-next to `output/`; the page shows it as `<matchmaker>-<setting>`. For example, the stochastic
-matchmaker with a higher softmax temperature:
+next to `output/`; the page shows it as `<matchmaker>-<setting>`, in a table comparing it with the
+matchmaker's main setting. For example, the stochastic matchmaker with a higher softmax temperature:
 
 ```bash
-python matchmakers/stochastic/simulate.py --temperature 0.02 --output-dir matchmakers/stochastic/output-temp-0.02
+python matchmakers/stochastic/simulate.py --temperature 0.05 --output-dir matchmakers/stochastic/output-temp-0.05
 ```

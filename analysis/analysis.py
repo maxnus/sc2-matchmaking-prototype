@@ -15,7 +15,9 @@ Each output dir holds one matchmaker's runs (`seed_*/`) and their aggregate
 `summary.json`, as written by `sim.cli.run_and_write`; its name is taken
 from the folder (e.g. `matchmakers/stochastic/output` → `stochastic`). A
 matchmaker can have further parameter settings in `output-<setting>` dirs
-next to `output/`, named `<matchmaker>-<setting>` on the page.
+next to `output/`, named `<matchmaker>-<setting>` on the page. The figures
+and the summary table show each matchmaker's main setting only; the
+stochastic matchmaker's settings are compared in a table of their own.
 Writes `report.html`, with a contents sidebar built from the `##` and `###`
 headings.
 """
@@ -345,14 +347,24 @@ def _ranking_colour(position: float | None) -> str:
     return "#" + "".join(f"{round(a + (b - a) * t):02x}" for a, b in zip(lo, hi))
 
 
-def summary_table(sims: list[SimResult]) -> str:
+# The settings table adds the two metrics that the window and temperature move most.
+SETTINGS_METRICS = HEADLINE_METRICS + [
+    ("rating_accuracy.spread_ratio_end", "Rating spread / true spread", ".2f", "closer to 1"),
+    ("matches_per_bot.std", "Matches per bot: standard deviation", ".1f", "lower"),
+]
+
+
+def summary_table(
+    sims: list[SimResult], metrics: list[tuple] = HEADLINE_METRICS, labels: list[str] | None = None,
+) -> str:
+    """One column per simulation, headed by its name or the given label."""
     header = "".join(
-        f"<th style='color:{s.color}'>{html.escape(s.name)}<br>"
+        f"<th style='color:{s.color}'>{html.escape(label)}<br>"
         f"<span class='muted'>{len(s.runs)} runs</span></th>"
-        for s in sims
+        for s, label in zip(sims, labels or [s.name for s in sims])
     )
     rows = []
-    for key, label, fmt, better in HEADLINE_METRICS:
+    for key, label, fmt, better in metrics:
         stats = [s.summary["metrics"][key] for s in sims]
         means = [stat["mean"] for stat in stats]
         positions = _ranking(means, better)
@@ -885,9 +897,18 @@ def _discover_matchmaker_dirs() -> list[Path]:
     """Find `matchmakers/*/output` and `matchmakers/*/output-*` dirs that
     have an aggregate summary.json."""
     root = REPO_ROOT / "matchmakers"
+
+    def order(out: Path) -> tuple:
+        # Numbers in a setting's name sort by value: window-5 before window-20.
+        parts = re.split(r"(\d+(?:\.\d+)?)", out.name)
+        return out.parent.name, [float(p) if i % 2 else p for i, p in enumerate(parts)]
+
     return sorted(
-        out for d in root.iterdir() if d.is_dir()
-        for out in d.glob("output*") if (out / "summary.json").exists()
+        (
+            out for d in root.iterdir() if d.is_dir()
+            for out in d.glob("output*") if (out / "summary.json").exists()
+        ),
+        key=order,
     )
 
 
@@ -912,6 +933,11 @@ def main():
         load_simulation(d, name, PALETTE[i % len(PALETTE)])
         for i, (d, name) in enumerate(zip(dirs, names))
     ]
+    # The figures and the summary table compare the matchmakers, each in its
+    # main setting (`output/`); a matchmaker's further settings are compared
+    # with its main one in a table of their own.
+    main_sims = [s for d, s in zip(dirs, sims) if d.name == "output"]
+    stochastic_settings = [s for d, s in zip(dirs, sims) if d.parent.name == "stochastic"]
 
     bots, gp, lookup = load_model(args.data_dir, args.model_dir)
     bot_ids = bots["bot_id"].tolist()
@@ -934,14 +960,20 @@ def main():
     blocks = {
         "calibration": _figure_html(plot_calibration(matchups)),
         "durations": _figure_html(plot_durations(processed, gp, sims[0])),
-        "summary-table": summary_table(sims),
-        "favourite-score": _figure_html(plot_favourite_score(sims, truth)),
-        "elo-diff": _figure_html(plot_elo_diff(sims)),
-        "rating-accuracy": _figure_html(plot_rating_accuracy(sims, burn_in)),
-        "matches-per-bot": _figure_html(plot_matches_per_bot(sims, bot_ids, bot_names)),
-        "distinct-opponents": _figure_html(plot_distinct_opponents(sims)),
-        "rematch-gaps": _figure_html(plot_rematch_gaps(sims)),
-        "heatmaps": heatmaps(sims, bot_names, truth),
+        "summary-table": summary_table(main_sims),
+        "stochastic-settings": summary_table(
+            stochastic_settings, SETTINGS_METRICS,
+            # Short headers, so that every setting fits: `stochastic-temp-0.01` → `temp-0.01`.
+            labels=["main" if s.name == "stochastic" else s.name.removeprefix("stochastic-")
+                    for s in stochastic_settings],
+        ),
+        "favourite-score": _figure_html(plot_favourite_score(main_sims, truth)),
+        "elo-diff": _figure_html(plot_elo_diff(main_sims)),
+        "rating-accuracy": _figure_html(plot_rating_accuracy(main_sims, burn_in)),
+        "matches-per-bot": _figure_html(plot_matches_per_bot(main_sims, bot_ids, bot_names)),
+        "distinct-opponents": _figure_html(plot_distinct_opponents(main_sims)),
+        "rematch-gaps": _figure_html(plot_rematch_gaps(main_sims)),
+        "heatmaps": heatmaps(main_sims, bot_names, truth),
     }
 
     text = _fill_values(args.source.read_text(encoding="utf-8"), values)

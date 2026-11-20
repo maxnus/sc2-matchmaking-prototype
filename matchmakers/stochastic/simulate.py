@@ -44,9 +44,9 @@ def main():
     # Scoring parameters
     parser.add_argument("--tau", type=float, default=15.0)
     parser.add_argument("--lam", type=float, default=40.0)
-    parser.add_argument("--temperature", type=float, default=0.01,
+    parser.add_argument("--temperature", type=float, default=0.02,
                         help="Softmax sampling temperature (0 = argmax)")
-    parser.add_argument("--window-games", type=float, default=14.0,
+    parser.add_argument("--window-games", type=float, default=10.0,
                         help="Fairness window: the last W·n/2 dispatched matches, W games per bot on average")
     args = parser.parse_args()
 

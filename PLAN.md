@@ -22,9 +22,11 @@ aiarena-web.
 | 2 | **Periods are UTC calendar days**, not a parameter. | Today's rounds already take about a day: 1.01 rounds a day, median round ~27 h, ~1,450 matches a round against ~1,450 a day. So round pages stay the same size and the division cadence is unchanged for the same `rounds_per_cycle`. Days are anchored to midnight because a period only rolls over on the next match request; a 24 h timer would drift. |
 | 3 | **Parameters per competition.** | τ, the weights and the window are tuned to a competition. A competition can be trialled alone. |
 | 4 | **Every match counts towards fairness**: cancelled, errored and crashed ones too. | Otherwise a bot that fails to start keeps the biggest deficit and gets picked again and again. |
-| 5 | **Fairness counts matches, over a window measured in matches**: the competition's last W·n/2 matches (W games per bot on average, running matches included), not the last 24 h. | Server time would starve bots with long games. Per-bot mean game length ranges from 10 min (p10) to 21 min (p90), max 40. W sets how much fairness weighs against skill: a bot k games behind scores ≈ k/(W√2), so at W ≈ 14, 2 games behind outweighs the whole skill term at `w_skill` = 0.1. A 24 h window ties W to throughput: ~17 in production against 13.7 in the sim, and less during outages. A window in matches keeps the tuned balance and carries over from the sim regardless of game time against wall time. |
+| 5 | **Fairness counts matches, over a window measured in matches**: the competition's last W·n/2 matches (W games per bot on average, running matches included), not the last 24 h. | Server time would starve bots with long games. Per-bot mean game length ranges from 10 min (p10) to 21 min (p90), max 40. W sets how much fairness weighs against skill: a bot k games behind scores ≈ k/(W√2), so at W = 10, about 1.5 games behind outweighs the whole skill term at `w_skill` = 0.1. A 24 h window ties W to throughput: ~17 in production against 13.7 in the sim, and less during outages. A window in matches keeps the tuned balance and carries over from the sim regardless of game time against wall time. **Default W = 10**: the results hardly change between 5 and 28 (phase 0), so it is a round number in that range, about 14 hours of play in production. |
 | 6 | **τ fixed in rank positions** (default 15), not scaled with ladder size. | τ sets how many neighbours count as close. Variety, rematch blocks and busy bots need about the same number of neighbours whatever the ladder size. Small competitions (n ≲ 2τ) then play everyone, as round-robin does with one division. Closeness is tuned through `w_skill` against `w_fair` and W, not τ: in the sim, a quarter of stochastic matches are more than 40 ranks apart. |
 | 7 | **New bots play immediately** in stochastic competitions, before they have a division. | The fairness term already favours them; waiting for the next division update would only delay them. |
+| 8 | **Temperature T = 0.02.** | Against 0.01 it gives up a little closeness (favourite's expected score 0.728 → 0.741) for less stretched ratings (error 57 → 48 ELO), more varied opponents and the most even match counts. At 0.05 matches get markedly less close (0.757, one in five lopsided) and the ratings order the bots less well, for little more variety. |
+| 9 | **Stochastic from a competition's first bots on.** The rematch block applies only from three active bots up. | A competition opens with only a few bots. With two, the rule "neither bot's latest opponent may be the other" would stop them from ever playing again. From three up it can't stall: the latest opponents block at most n − 1 of the n(n − 1)/2 pairs, so once every bot is free some pair is allowed. |
 
 ### Proposed here, not yet discussed
 
@@ -62,19 +64,17 @@ aiarena-web.
 
 Independent of phases 1–4; needed before the first competition switches.
 
-1. **Fairness window in matches.** Change the window in `matchmakers/stochastic/matchmaker.py` from
-   24 h of completions plus running matches to the last `W·n/2` dispatched matches. Check that
-   W = 14 reproduces the current results; it should, since the sim's throughput is constant. Then
-   sweep W = 7, 14, 28 and pick the production default.
-2. **Temperature.** The code default is 0.01, but the report's findings favour 0.02. Pick the
-   production default.
-3. **Parallel cap.** Re-run with the value production will use, if it differs from 4.
-4. **Smaller competitions**, only if one well below ~170 bots will use stochastic. Add a simulator
-   option to run on a subset of bots (the model covers any pair) and tune that competition's
-   parameters on it.
+1. **Fairness window in matches.** *Done.* The window is the last `W·n/2` dispatched matches; at
+   W = 14 it reproduces the 24-hour window's results within their confidence intervals.
+2. **Defaults.** *Done:* W = 10 and T = 0.02 (decisions 5 and 8), now the prototype's main setting,
+   with W = 5, 20 and T = 0.01, 0.05 compared in the report.
+3. **Parallel cap.** *Nothing to do:* production will use 4, as the sim does.
+4. **Small ladders.** *Needed*, because competitions open with a few bots. The simulator plays a
+   random subset of N bots (`--n-bots`); compare stochastic with round-robin in one division for
+   small N, starting from flat ratings as a new competition does.
 5. **Parity fixtures.** Export a few matchmaker snapshots as JSON for aiarena-web's tests: ranks,
    window counts, games-since-last-met, the allowed mask, and the expected scores and
-   argmax pair.
+   argmax pair. Left for phase 4, which uses them.
 
 Output: the default parameter values for phase 2, and the fixtures for phase 4.
 
@@ -116,8 +116,8 @@ and NOT NULL follow in a later deploy.
 | `w_var` | 0.2 | |
 | `tau` | 15 | Rank positions. |
 | `lam` | 40 | Games until a past match-up is forgotten. |
-| `temperature` | from phase 0 | 0 means always take the best pair. |
-| `fairness_window_games` | from phase 0 (≈14) | W. |
+| `temperature` | 0.02 | 0 means always take the best pair. |
+| `fairness_window_games` | 10 | W. |
 
 Update the `rounds_per_cycle` help text: in stochastic competitions it only sets how often divisions
 are refreshed, counted in days.
@@ -190,8 +190,9 @@ production form of the prototype's "bookkeeping at dispatch".
     games; beyond 5λ the variety term is already ≈ 1;
   - each bot's last opponent;
   - the pairs currently playing.
-- **Candidate pairs**: available × available, minus pairs currently playing and pairs where either
-  bot's last opponent was the other.
+- **Candidate pairs**: available × available, minus pairs currently playing and, when the
+  competition has at least three active bots, pairs where either bot's last opponent was the other
+  (decision 9).
 
 A handful of queries in all. The fairness and variety data can come from one query over the
 competitors' recent matches. Measure on production-sized data; add a cache only if needed.

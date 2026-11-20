@@ -15,10 +15,10 @@ class ScoringParams:
     w_var: float = 0.2
     tau: float = 15.0  # rank-difference tolerance (in rank positions)
     lam: float = 40.0
-    temperature: float = 0.01  # softmax sampling temperature (0 = argmax)
+    temperature: float = 0.02  # softmax sampling temperature (0 = argmax)
     # Fairness window: the last window_games · n / 2 dispatched matches, so
     # window_games games per bot on average.
-    window_games: float = 14.0
+    window_games: float = 10.0
 
 
 # The score's components. Each takes the values of many pairs at once as
