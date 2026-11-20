@@ -12,6 +12,11 @@ Its text lives in [`analysis/report.md`](analysis/report.md), Markdown with TeX 
 `analysis/analysis.py` turns it into `analysis/report.html`, filling in the figures and every number
 quoted in the text from the data, the model and the simulation runs.
 
+## Plan
+
+[`PLAN.md`](PLAN.md) describes how to bring the stochastic matchmaker to AI Arena: what changes in
+aiarena-web, why the match controller needs none, and what to re-tune here first.
+
 ## Running
 
 ```bash
