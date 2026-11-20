@@ -71,13 +71,15 @@ Independent of phases 1–4; needed before the first competition switches.
    report compares stochastic with round-robin in one division on 2 to 32 bots, starting from flat
    ratings as a new competition does. This found the two-bot rematch stall (decision 9) and the
    uneven match counts that decision 10 fixes.
-5. **Parity fixtures.** Export a few matchmaker snapshots as JSON for aiarena-web's tests: ranks,
-   window counts, games-since-last-met, the allowed mask, and the expected scores and
-   argmax pair. Left for phase 4, which uses them.
+5. **Parity fixtures.** *Done:* `matchmakers/stochastic/export_parity_fixtures.py` writes random
+   snapshots and the score components the prototype computes for them, under two parameter
+   settings; aiarena-web's tests check its scoring core against them.
 
 Output: the default parameter values for phase 2, and the fixtures for phase 4.
 
 ## Phase 1: split the matchmaking code (no behaviour change)
+
+*Done:* [maxnus/aiarena-web#1](https://github.com/maxnus/aiarena-web/pull/1).
 
 `aiarena/core/services/service_implementations/_matches.py` mixes round-robin scheduling, division
 assignment, starting and prioritising round matches, and cancellations and timeouts. Split it before
@@ -101,21 +103,26 @@ The existing tests are the regression suite and must pass unchanged: `test_round
 
 ## Phase 2: schema
 
+*Done, with phases 3 and 4,* on the branch `ccr-2b67f687-pe4xp3-stochastic`, stacked on phase 1.
+As built, the parameters have descriptive names (below), and they sit next to the division
+settings rather than in a fieldset: the competition admin lists every field in model order, and a
+fieldset would hide any field later added outside it. Left blank, a parameter takes its default.
+
 All fields are additive, nullable with `# TODO(make-not-null)`, following
 `aiarena/core/models/CLAUDE.md`. They can ship with phases 3–4, because migrations run first. Backfill
 and NOT NULL follow in a later deploy.
 
-**`Competition`**, shown in the admin under a *Matchmaking* fieldset:
+**`Competition`**:
 
 | Field | Default | Notes |
 |---|---|---|
 | `matchmaker` | `round_robin` | Choices `round_robin`, `stochastic`. NULL is read as `round_robin`. This is the rollback switch. |
-| `w_skill` | 0.1 | |
-| `w_fair` | 1.0 | |
-| `w_var` | 0.2 | |
-| `tau` | 15 | Rank positions. |
-| `lam` | 40 | Games until a past match-up is forgotten. |
-| `temperature` | 0.02 | 0 means always take the best pair. |
+| `skill_weight` | 0.1 | |
+| `fairness_weight` | 1.0 | |
+| `variety_weight` | 0.2 | |
+| `skill_tolerance_ranks` | 15 | τ, in rank positions. |
+| `variety_memory_games` | 40 | λ: games until a past match-up is forgotten. |
+| `sampling_temperature` | 0.02 | T; 0 means always take the best pair. |
 | `fairness_window_games` | 10 | W. |
 
 Update the `rounds_per_cycle` help text: in stochastic competitions it only sets how often divisions
@@ -129,6 +136,12 @@ are refreshed, counted in days.
 | `matchmaker` | `round_robin` | Which matchmaker created the round. NULL means round-robin (all existing rows). |
 
 ## Phase 3: round lifecycle
+
+As built, the seal calls became one rule: opening any round seals the competition's open period,
+which covers both the daily rollover and a switch back to round-robin. On top of that, every
+request of a competition that isn't stochastic seals an open period first. Otherwise, after a
+switch back with `max_active_rounds` = 1, the open period would count as the one active round and
+could never complete, and round-robin could never open a round.
 
 - `update_round_if_completed` (`internal/rounds.py`) returns early while the round
   `accepts_new_matches`.
@@ -148,6 +161,10 @@ Tests:
 - Sealing an idle period completes it, and closes a closing competition.
 
 ## Phase 4: the stochastic matchmaker
+
+As built, "no allowed pair" raises the existing `NotEnoughAvailableBots`, which the coordinator
+already catches. The variety history is also bounded to the last 28 days, only to keep its query
+small; an active bot plays its 200 games of history in far less time.
 
 ### 4.1 Scoring core
 
